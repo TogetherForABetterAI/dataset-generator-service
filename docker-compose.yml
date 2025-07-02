@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  dataset-grpc-service:
+    build: .
+    container_name: dataset-grpc-service
+    ports:
+      - "50051:50051"
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped 
