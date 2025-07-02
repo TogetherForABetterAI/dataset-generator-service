@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x64\x61taset_service.proto\x12\x0f\x64\x61taset_service\"f\n\x14StreamBatchesRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x12\n\nbatch_size\x18\x02 \x01(\x05\x12\x0f\n\x07shuffle\x18\x03 \x01(\x08\x12\x13\n\x0bmax_batches\x18\x04 \x01(\x05\"^\n\x0fGetBatchRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x12\n\nbatch_size\x18\x02 \x01(\x05\x12\x0f\n\x07shuffle\x18\x03 \x01(\x08\x12\x10\n\x08\x62\x61tch_id\x18\x04 \x01(\x05\"B\n\tDataBatch\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x10\n\x08\x62\x61tch_id\x18\x02 \x01(\x05\x12\x15\n\ris_last_batch\x18\x03 \x01(\x08\"-\n\x15GetDatasetInfoRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\"y\n\x0b\x44\x61tasetInfo\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x15\n\rtotal_samples\x18\x02 \x01(\x05\x12\x14\n\x0csample_shape\x18\x03 \x03(\x05\x12\x11\n\tdata_type\x18\x04 \x01(\t\x12\x14\n\x0cis_available\x18\x05 \x01(\x08\"\x14\n\x12HealthCheckRequest\"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t2\xe2\x02\n\x0e\x44\x61tasetService\x12T\n\rStreamBatches\x12%.dataset_service.StreamBatchesRequest\x1a\x1a.dataset_service.DataBatch0\x01\x12H\n\x08GetBatch\x12 .dataset_service.GetBatchRequest\x1a\x1a.dataset_service.DataBatch\x12V\n\x0eGetDatasetInfo\x12&.dataset_service.GetDatasetInfoRequest\x1a\x1c.dataset_service.DatasetInfo\x12X\n\x0bHealthCheck\x12#.dataset_service.HealthCheckRequest\x1a$.dataset_service.HealthCheckResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x64\x61taset_service.proto\x12\x0f\x64\x61taset_service\"f\n\x14StreamBatchesRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x12\n\nbatch_size\x18\x02 \x01(\x05\x12\x0f\n\x07shuffle\x18\x03 \x01(\x08\x12\x13\n\x0bmax_batches\x18\x04 \x01(\x05\"P\n\x0fGetBatchRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x12\n\nbatch_size\x18\x02 \x01(\x05\x12\x13\n\x0b\x62\x61tch_index\x18\x03 \x01(\x05\"E\n\tDataBatch\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x13\n\x0b\x62\x61tch_index\x18\x02 \x01(\x05\x12\x15\n\ris_last_batch\x18\x03 \x01(\x08\"-\n\x15GetDatasetInfoRequest\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\"y\n\x0b\x44\x61tasetInfo\x12\x14\n\x0c\x64\x61taset_name\x18\x01 \x01(\t\x12\x15\n\rtotal_samples\x18\x02 \x01(\x05\x12\x14\n\x0csample_shape\x18\x03 \x03(\x05\x12\x11\n\tdata_type\x18\x04 \x01(\t\x12\x14\n\x0cis_available\x18\x05 \x01(\x08\"\x14\n\x12HealthCheckRequest\"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t2\xe2\x02\n\x0e\x44\x61tasetService\x12T\n\rStreamBatches\x12%.dataset_service.StreamBatchesRequest\x1a\x1a.dataset_service.DataBatch0\x01\x12H\n\x08GetBatch\x12 .dataset_service.GetBatchRequest\x1a\x1a.dataset_service.DataBatch\x12V\n\x0eGetDatasetInfo\x12&.dataset_service.GetDatasetInfoRequest\x1a\x1c.dataset_service.DatasetInfo\x12X\n\x0bHealthCheck\x12#.dataset_service.HealthCheckRequest\x1a$.dataset_service.HealthCheckResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -23,17 +23,17 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_STREAMBATCHESREQUEST']._serialized_start=42
   _globals['_STREAMBATCHESREQUEST']._serialized_end=144
   _globals['_GETBATCHREQUEST']._serialized_start=146
-  _globals['_GETBATCHREQUEST']._serialized_end=240
-  _globals['_DATABATCH']._serialized_start=242
-  _globals['_DATABATCH']._serialized_end=308
-  _globals['_GETDATASETINFOREQUEST']._serialized_start=310
-  _globals['_GETDATASETINFOREQUEST']._serialized_end=355
-  _globals['_DATASETINFO']._serialized_start=357
-  _globals['_DATASETINFO']._serialized_end=478
-  _globals['_HEALTHCHECKREQUEST']._serialized_start=480
-  _globals['_HEALTHCHECKREQUEST']._serialized_end=500
-  _globals['_HEALTHCHECKRESPONSE']._serialized_start=502
-  _globals['_HEALTHCHECKRESPONSE']._serialized_end=556
-  _globals['_DATASETSERVICE']._serialized_start=559
-  _globals['_DATASETSERVICE']._serialized_end=913
+  _globals['_GETBATCHREQUEST']._serialized_end=226
+  _globals['_DATABATCH']._serialized_start=228
+  _globals['_DATABATCH']._serialized_end=297
+  _globals['_GETDATASETINFOREQUEST']._serialized_start=299
+  _globals['_GETDATASETINFOREQUEST']._serialized_end=344
+  _globals['_DATASETINFO']._serialized_start=346
+  _globals['_DATASETINFO']._serialized_end=467
+  _globals['_HEALTHCHECKREQUEST']._serialized_start=469
+  _globals['_HEALTHCHECKREQUEST']._serialized_end=489
+  _globals['_HEALTHCHECKRESPONSE']._serialized_start=491
+  _globals['_HEALTHCHECKRESPONSE']._serialized_end=545
+  _globals['_DATASETSERVICE']._serialized_start=548
+  _globals['_DATASETSERVICE']._serialized_end=902
 # @@protoc_insertion_point(module_scope)
