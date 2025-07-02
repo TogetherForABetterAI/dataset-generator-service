@@ -18,6 +18,4 @@ sudo docker compose down
 
 ### Notes
 - The service will automatically restart if it crashes or the system reboots, unless you stop it manually (`restart: unless-stopped`).
-- You can add more services (such as your Go microservice) to the `docker-compose.yml` as needed.
-
 ---
