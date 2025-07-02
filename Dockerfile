@@ -27,4 +27,4 @@ COPY . .
 EXPOSE 50051
 
 # Set the entrypoint
-CMD ["python", "src/server/grpc_server.py"] 
+CMD ["python", "src/main.py"] 
