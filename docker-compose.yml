@@ -1,6 +1,13 @@
 version: '3.8'
 
 services:
+  proto-gen:
+    build:
+      context: .
+      dockerfile: Dockerfile.proto
+    volumes:
+      - ./src/pb:/app/out
+
   dataset-grpc-service:
     build: .
     container_name: dataset-grpc-service
@@ -8,4 +15,8 @@ services:
       - "50051:50051"
     environment:
       - PYTHONPATH=/app
-    restart: unless-stopped 
+    depends_on:
+      - proto-gen
+    volumes:
+      - ./src/pb:/app/src/pb
+    restart: unless-stopped
