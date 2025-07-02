@@ -19,14 +19,13 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
             context.set_details("Dataset not found")
             return
         loader = DataLoader(
-            dataset, batch_size=request.batch_size, shuffle=request.shuffle
-        )
+            dataset, batch_size=request.batch_size)
         for idx, (data, target) in enumerate(loader):
             batch_np = data.numpy()
             batch_bytes = batch_np.tobytes()
             yield dataset_service_pb2.DataBatch(
                 data=batch_bytes,
-                batch_id=idx,
+                batch_index=idx,
                 is_last_batch=(idx == len(loader) - 1),
             )
 
@@ -37,8 +36,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
                 context.set_details("Dataset not found")
                 return dataset_service_pb2.DataBatch()
             loader = DataLoader(
-                dataset, batch_size=request.batch_size, shuffle=request.shuffle
-            )
+                dataset, batch_size=request.batch_size)
             # Get the batch at the requested index
             for idx, (data, target) in enumerate(loader):
                 if idx == request.batch_index:
@@ -47,7 +45,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
                     is_last = (idx == len(loader) - 1)
                     return dataset_service_pb2.DataBatch(
                         data=batch_bytes,
-                        batch_id=idx,
+                        batch_index=idx,
                         is_last_batch=is_last,
                     )
             # If batch_index is out of range
