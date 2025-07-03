@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install grpcio-tools==1.59.3 protobuf==4.25.1
+
+COPY proto/ ./proto/
+COPY src/scripts/generate_and_patch.sh /app/generate_and_patch.sh
+RUN chmod +x /app/generate_and_patch.sh
+
+# Create the output directory
+RUN mkdir -p /app/out
+
+ENTRYPOINT ["/app/generate_and_patch.sh"]
