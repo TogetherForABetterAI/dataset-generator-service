@@ -2,12 +2,14 @@ services:
   proto-gen:
     build:
       context: .
-      dockerfile: Dockerfile.proto
+      dockerfile: docker/Dockerfile.proto
     volumes:
       - ./src/pb:/app/out
 
   dataset-grpc-service:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     container_name: dataset-grpc-service
     ports:
       - "50051:50051"
