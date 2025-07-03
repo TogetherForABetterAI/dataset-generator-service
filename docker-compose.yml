@@ -13,8 +13,22 @@ services:
       - "50051:50051"
     environment:
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - GRPC_POLL_STRATEGY=epoll1
     depends_on:
       - proto-gen
     volumes:
       - ./src/pb:/app/src/pb
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
