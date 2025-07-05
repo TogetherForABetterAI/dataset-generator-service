@@ -25,12 +25,18 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
+          cpus: "2.0"
           memory: 2G
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
     ulimits:
       nofile:
         soft: 65536
         hard: 65536
+    networks:
+      - mlflow-network
+
+networks:
+  mlflow-network:
+    external: true
