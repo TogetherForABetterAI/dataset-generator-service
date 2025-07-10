@@ -10,8 +10,6 @@ services:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - GRPC_POLL_STRATEGY=epoll1
-    depends_on:
-      - proto-gen
     volumes:
       - ./src/pb:/app/src/pb
     restart: unless-stopped
