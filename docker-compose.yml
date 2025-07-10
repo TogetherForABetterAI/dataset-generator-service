@@ -35,8 +35,8 @@ services:
         soft: 65536
         hard: 65536
     networks:
-      - tpp_network
+      - tpp-network
 
 networks:
-  tpp_network:
+  tpp-network:
     external: true
