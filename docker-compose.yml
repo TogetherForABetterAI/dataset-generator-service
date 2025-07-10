@@ -1,11 +1,4 @@
 services:
-  proto-gen:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.proto
-    volumes:
-      - ./src/pb:/app/out
-
   dataset-grpc-service:
     build:
       context: .
