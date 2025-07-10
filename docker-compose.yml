@@ -35,8 +35,8 @@ services:
         soft: 65536
         hard: 65536
     networks:
-      - mlflow-network
+      - tpp_network
 
 networks:
-  mlflow-network:
+  tpp_network:
     external: true
