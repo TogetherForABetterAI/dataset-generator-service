@@ -1,5 +1,5 @@
 from src.pb import dataset_service_pb2, dataset_service_pb2_grpc
-from src.data.mnist_loader import load_mnist
+from src.dataset.mnist_loader import load_mnist
 from torch.utils.data import DataLoader
 import grpc
 import numpy as np
