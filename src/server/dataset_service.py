@@ -52,18 +52,15 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
 
         # Pre-allocate array for better performance
         batch_array = np.empty((batch_size,) + sample_shape, dtype=sample_dtype)
+        labels_array = np.empty((batch_size,), dtype=np.int32)
 
         # Fill array efficiently
         for i in range(batch_size):
-            sample = dataset[start_idx + i][0]
-            if hasattr(sample, "numpy"):
-                # Convert PyTorch tensor to numpy
-                batch_array[i] = sample.numpy()
-            else:
-                # Already numpy array
-                batch_array[i] = sample
+            sample, label = dataset[start_idx + i]
+            batch_array[i] = sample.numpy() if hasattr(sample, "numpy") else sample
+            labels_array[i] = int(label)
 
-        return batch_array
+        return batch_array, labels_array
 
     def StreamBatches(self, request, context):
         dataset = self.datasets.get(request.dataset_name)
@@ -78,11 +75,12 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
 
         for idx, (start_idx, end_idx) in enumerate(batch_indices):
             # Extract batch efficiently
-            batch_tensor = self._extract_batch_efficient(dataset, start_idx, end_idx)
+            batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
             batch_bytes = batch_tensor.tobytes()
 
             yield dataset_service_pb2.DataBatch(
                 data=batch_bytes,
+                labels=labels.tolist(),
                 batch_index=idx,
                 is_last_batch=(idx == len(batch_indices) - 1),
             )
@@ -109,11 +107,12 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         start_idx, end_idx = batch_indices[request.batch_index]
 
         # Extract batch efficiently
-        batch_tensor = self._extract_batch_efficient(dataset, start_idx, end_idx)
+        batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
         batch_bytes = batch_tensor.tobytes()
 
         return dataset_service_pb2.DataBatch(
             data=batch_bytes,
+            labels=labels.tolist(),
             batch_index=request.batch_index,
             is_last_batch=(request.batch_index == len(batch_indices) - 1),
         )
