@@ -5,10 +5,10 @@ package dataset_service;
 // Dataset service definition
 service DatasetService {
   // Stream batches of data continuously
-  rpc StreamBatches(StreamBatchesRequest) returns (stream DataBatch);
+  rpc StreamBatches(StreamBatchesRequest) returns (stream DataBatchLabeled);
   
   // Get a single batch of data
-  rpc GetBatch(GetBatchRequest) returns (DataBatch);
+  rpc GetBatch(GetBatchRequest) returns (DataBatchLabeled);
   
   // Get dataset metadata
   rpc GetDatasetInfo(GetDatasetInfoRequest) returns (DatasetInfo);
@@ -32,12 +32,17 @@ message GetBatchRequest {
   int32 batch_index = 3; 
 }
 
-// Response containing a batch of data
-message DataBatch {
-  bytes data = 1;           // serialized tensor data
-  repeated int32 labels = 2; // labels corresponding to the data
-  int32 batch_index = 3;       
-  bool is_last_batch = 4;   // indicates if this is the last batch
+message DataBatchLabeled {
+  bytes data = 1;
+  repeated int32 labels = 2;
+  int32 batch_index = 3;
+  bool is_last_batch = 4;
+}
+
+message DataBatchUnlabeled {
+  bytes data = 1;
+  int32 batch_index = 2;
+  bool is_last_batch = 3;
 }
 
 // Request for dataset information
