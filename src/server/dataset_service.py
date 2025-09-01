@@ -78,7 +78,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
             batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
             batch_bytes = batch_tensor.tobytes()
 
-            yield dataset_service_pb2.DataBatch(
+            yield dataset_service_pb2.DataBatchLabeled(
                 data=batch_bytes,
                 labels=labels.tolist(),
                 batch_index=idx,
@@ -90,7 +90,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         if dataset is None:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("Dataset not found")
-            return dataset_service_pb2.DataBatch()
+            return dataset_service_pb2.DataBatchLabeled()
 
         # Get pre-computed batch indices
         batch_indices = self._get_batch_indices(
@@ -101,7 +101,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         if request.batch_index >= len(batch_indices):
             context.set_code(grpc.StatusCode.OUT_OF_RANGE)
             context.set_details("Batch index out of range")
-            return dataset_service_pb2.DataBatch()
+            return dataset_service_pb2.DataBatchLabeled()
 
         # Extract batch directly using pre-computed indices
         start_idx, end_idx = batch_indices[request.batch_index]
@@ -110,7 +110,7 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
         batch_bytes = batch_tensor.tobytes()
 
-        return dataset_service_pb2.DataBatch(
+        return dataset_service_pb2.DataBatchLabeled(
             data=batch_bytes,
             labels=labels.tolist(),
             batch_index=request.batch_index,
