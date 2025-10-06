@@ -1,5 +1,6 @@
 from src.pb import dataset_service_pb2, dataset_service_pb2_grpc
 from src.dataset.mnist_loader import load_mnist
+from src.dataset.acdc_loader import load_acdc
 from torch.utils.data import DataLoader
 import grpc
 import numpy as np
@@ -11,9 +12,13 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         self.datasets = {}
         self.batch_indices = {}  # Cache for batch indices
         self._load_mnist()
+        self._load_acdc()
 
     def _load_mnist(self):
         self.datasets["mnist"] = load_mnist()
+
+    def _load_acdc(self):
+        self.datasets["acdc"] = load_acdc()
 
     @lru_cache(maxsize=128)
     def _get_batch_indices(self, dataset_name, batch_size):
@@ -75,7 +80,9 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
 
         for idx, (start_idx, end_idx) in enumerate(batch_indices):
             # Extract batch efficiently
-            batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
+            batch_tensor, labels = self._extract_batch_efficient(
+                dataset, start_idx, end_idx
+            )
             batch_bytes = batch_tensor.tobytes()
 
             yield dataset_service_pb2.DataBatchLabeled(
@@ -107,7 +114,9 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         start_idx, end_idx = batch_indices[request.batch_index]
 
         # Extract batch efficiently
-        batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
+        batch_tensor, labels = self._extract_batch_efficient(
+            dataset, start_idx, end_idx
+        )
         batch_bytes = batch_tensor.tobytes()
 
         return dataset_service_pb2.DataBatchLabeled(
