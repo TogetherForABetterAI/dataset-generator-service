@@ -114,7 +114,14 @@ def load_acdc():
         ACDCDataset: PyTorch Dataset containing cardiac MRI slices
     """
     # Path to ACDC data relative to the service root
-    acdc_data_path = "./data/acdc"
+    # Try full dataset first, fallback to sample dataset
+    acdc_data_path = "./data/acdc_full/ACDC_preprocessed/ACDC_training_slices"
+
+    if not os.path.exists(acdc_data_path):
+        print(
+            f"Full ACDC dataset not found at {acdc_data_path}, using sample dataset..."
+        )
+        acdc_data_path = "./data/acdc"
 
     # Check if data exists
     if not os.path.exists(acdc_data_path):
