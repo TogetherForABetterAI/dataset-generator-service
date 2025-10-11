@@ -1,5 +1,6 @@
 from src.pb import dataset_service_pb2, dataset_service_pb2_grpc
 from src.dataset.mnist_loader import load_mnist
+from src.dataset.acdc_loader import load_acdc
 from torch.utils.data import DataLoader
 import grpc
 import numpy as np
@@ -11,9 +12,13 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         self.datasets = {}
         self.batch_indices = {}  # Cache for batch indices
         self._load_mnist()
+        self._load_acdc()
 
     def _load_mnist(self):
         self.datasets["mnist"] = load_mnist()
+
+    def _load_acdc(self):
+        self.datasets["acdc"] = load_acdc()
 
     @lru_cache(maxsize=128)
     def _get_batch_indices(self, dataset_name, batch_size):
@@ -75,7 +80,9 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
 
         for idx, (start_idx, end_idx) in enumerate(batch_indices):
             # Extract batch efficiently
-            batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
+            batch_tensor, labels = self._extract_batch_efficient(
+                dataset, start_idx, end_idx
+            )
             batch_bytes = batch_tensor.tobytes()
 
             yield dataset_service_pb2.DataBatchLabeled(
@@ -86,8 +93,15 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
             )
 
     def GetBatch(self, request, context):
+        print(
+            f"[GetBatch] Received request: dataset_name={request.dataset_name}, batch_size={request.batch_size}, batch_index={request.batch_index}"
+        )
+
         dataset = self.datasets.get(request.dataset_name)
         if dataset is None:
+            print(
+                f"[GetBatch] ERROR: Dataset '{request.dataset_name}' not found. Available: {list(self.datasets.keys())}"
+            )
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("Dataset not found")
             return dataset_service_pb2.DataBatchLabeled()
@@ -97,8 +111,16 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
             request.dataset_name, request.batch_size
         )
 
+        total_batches = len(batch_indices)
+        print(
+            f"[GetBatch] Dataset has {len(dataset)} samples, {total_batches} batches with batch_size={request.batch_size}"
+        )
+
         # Check if batch_index is valid
         if request.batch_index >= len(batch_indices):
+            print(
+                f"[GetBatch] ERROR: Batch index {request.batch_index} out of range (max: {len(batch_indices)-1})"
+            )
             context.set_code(grpc.StatusCode.OUT_OF_RANGE)
             context.set_details("Batch index out of range")
             return dataset_service_pb2.DataBatchLabeled()
@@ -107,14 +129,21 @@ class DatasetServiceServicer(dataset_service_pb2_grpc.DatasetServiceServicer):
         start_idx, end_idx = batch_indices[request.batch_index]
 
         # Extract batch efficiently
-        batch_tensor, labels = self._extract_batch_efficient(dataset, start_idx, end_idx)
+        batch_tensor, labels = self._extract_batch_efficient(
+            dataset, start_idx, end_idx
+        )
         batch_bytes = batch_tensor.tobytes()
+
+        is_last = request.batch_index == len(batch_indices) - 1
+        print(
+            f"[GetBatch] Returning batch {request.batch_index}/{total_batches-1}, size={len(batch_bytes)} bytes, is_last={is_last}"
+        )
 
         return dataset_service_pb2.DataBatchLabeled(
             data=batch_bytes,
             labels=labels.tolist(),
             batch_index=request.batch_index,
-            is_last_batch=(request.batch_index == len(batch_indices) - 1),
+            is_last_batch=is_last,
         )
 
     def GetDatasetInfo(self, request, context):
