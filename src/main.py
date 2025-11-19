@@ -1,53 +1,45 @@
-import grpc
-from concurrent import futures
-import time
-import os
-from grpc_reflection.v1alpha import reflection
-from src.pb import dataset_service_pb2, dataset_service_pb2_grpc
-from src.server.dataset_service import DatasetServiceServicer
+import logging
+import sys
+from src.config.config import load_config
+from src.server.main import Server
 
 
-def serve():
-    # Optimize thread pool size based on CPU cores
-    max_workers = min(32, (os.cpu_count() or 1) * 4)
+def setup_logging(log_level: str):
+    """Configure logging for the application"""
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
 
-    # Configure server with optimized settings
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=max_workers),
-        options=[
-            ("grpc.max_send_message_length", 100 * 1024 * 1024),  # 100MB
-            ("grpc.max_receive_message_length", 100 * 1024 * 1024),  # 100MB
-            ("grpc.max_concurrent_streams", 100),
-            ("grpc.keepalive_time_ms", 30000),
-            ("grpc.keepalive_timeout_ms", 5000),
-            ("grpc.keepalive_permit_without_calls", True),
-            ("grpc.http2.max_pings_without_data", 0),
-            ("grpc.http2.min_time_between_pings_ms", 10000),
-            ("grpc.http2.min_ping_interval_without_data_ms", 300000),
-        ],
+    logging.basicConfig(
+        level=numeric_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    dataset_service_pb2_grpc.add_DatasetServiceServicer_to_server(
-        DatasetServiceServicer(), server
-    )
 
-    SERVICE_NAMES = (
-        dataset_service_pb2.DESCRIPTOR.services_by_name["DatasetService"].full_name,
-        reflection.SERVICE_NAME,
-    )
-    reflection.enable_server_reflection(SERVICE_NAMES, server)
-
-    server.add_insecure_port("[::]:50051")
-    print(f"gRPC server started on port 50051 with {max_workers} workers.")
-    server.start()
-
+def main():
+    """
+    Main entry point for the Dataset Generation Service.
+    Loads configuration and starts the server.
+    """
     try:
-        while True:
-            time.sleep(86400)
-    except KeyboardInterrupt:
-        print("Shutting down server...")
-        server.stop(0)
+        # Load configuration from environment variables
+        config = load_config()
+
+        # Setup logging
+        setup_logging(config.log_level)
+
+        logger = logging.getLogger(__name__)
+        logger.info("=" * 60)
+        logger.info("Dataset Generation Service")
+        logger.info("=" * 60)
+
+        # Create and start server
+        server = Server(config)
+        server.run()
+
+    except Exception as e:
+        logging.error(f"Failed to start service: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    serve()
+    main()
