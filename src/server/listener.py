@@ -20,8 +20,7 @@ class Listener:
         self.config = config
         self.middleware = RabbitMQMiddleware(config.middleware_config)
         self.workers = []
-        self.jobs_queue = multiprocessing.Queue(maxsize=config.worker_pool_size)
-        self.running = False
+        self.jobs_queue = multiprocessing.Queue(maxsize=config.worker_pool_size + 10)
         self.consumer_tag = None  # Will be set when consuming starts
 
     def start(self):
@@ -50,7 +49,6 @@ class Listener:
             logger.info("Worker pool started. Workers are idle, waiting for jobs.")
 
             # Start consuming messages
-            self.running = True
             self._consume_messages(channel)
 
         except KeyboardInterrupt:
@@ -103,12 +101,13 @@ class Listener:
 
         # Start consuming with manual ACK
         # ACK will be done by workers after successful processing
-        # Store consumer_tag for later cancellation during shutdown
+        # Use POD_NAME as consumer_tag for Kubernetes pod identification
         self.consumer_tag = self.middleware.consume(
             channel=channel,
             queue="generate_data_queue",
             callback=callback,
             auto_ack=False,
+            consumer_tag=self.config.pod_name,
         )
 
         logger.info(
@@ -120,41 +119,35 @@ class Listener:
         self.middleware.start_consuming(channel)
 
     def stop(self):
-        """Stop the listener and all worker processes gracefully"""
-        logger.info("Stopping Listener...")
-        self.running = False
-
-        # Notify workers to stop
-        logger.info("Sending stop signals to workers...")
-        for _ in range(len(self.workers)):
-            self.jobs_queue.put(None)
-
-        # Wait for workers to finish
-        logger.info("Waiting for workers to finish...")
-        for i, worker in enumerate(self.workers):
-            worker.join()
-            if worker.is_alive():
-                logger.warning(
-                    f"Worker {i} (PID: {worker.pid}) did not stop gracefully, terminating..."
-                )
-                worker.terminate()
-                worker.join(timeout=5)
-            logger.info(f"Worker {i} stopped")
-
-        # Close middleware
+        """
+        Interrupt all active workers and stop the listener.
+        This is called during graceful shutdown to signal workers to stop.
+        """
+        self.middleware.stop_consuming(self.consumer_tag)
+        self._interrupt_workers()
         self.middleware.close()
         logger.info("Listener stopped successfully")
 
-    def interrupt_workers(self):
+    def _interrupt_workers(self):
         """
         Interrupt all active workers.
         This is called during graceful shutdown to signal workers to stop.
         """
-        logger.info("Interrupting all workers...")
-        self.stop()
+        logger.info("Interrupting all workers and listener...")
 
-    def get_consumer_tag(self) -> str:
-        """Get the consumer tag used by this listener"""
-        if self.consumer_tag is None:
-            raise RuntimeError("Consumer tag not set - listener not started yet")
-        return self.consumer_tag
+        # If there is any worker without ongoing processing,
+        # signal them to stop
+        logger.info("Sending stop signals to workers...")
+        for _ in range(len(self.workers)):
+            self.jobs_queue.put(None)
+
+        # Notify workers to stop in case they are processing
+        logger.info("Waiting for workers to finish...")
+        for i, worker in enumerate(self.workers):
+            worker.terminate()
+            logger.info(f"Sent SIGTERM to Worker {i} (PID: {worker.pid})")
+
+        # Wait for workers to finish
+        for i, worker in enumerate(self.workers):
+            worker.join()
+            logger.info(f"Worker {i} stopped (PID: {worker.pid})")
