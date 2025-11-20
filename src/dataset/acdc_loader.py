@@ -1,9 +1,14 @@
 import os
+import threading
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+
+# Global lock to prevent concurrent access during initialization
+_acdc_lock = threading.Lock()
+_acdc_dataset = None
 
 
 class ACDCDataset(Dataset):
@@ -108,37 +113,51 @@ class ACDCDataset(Dataset):
 
 def load_acdc():
     """
-    Load ACDC (Automated Cardiac Diagnosis Challenge) dataset.
+    Load ACDC (Automated Cardiac Diagnosis Challenge) dataset with thread-safe initialization.
+    Only one thread/process will initialize, others will wait.
 
     Returns:
         ACDCDataset: PyTorch Dataset containing cardiac MRI slices
     """
-    # Path to ACDC data relative to the service root
-    # Try full dataset first, fallback to sample dataset
-    acdc_data_path = "./data/acdc_full/ACDC_preprocessed/ACDC_training_slices"
+    global _acdc_dataset
 
-    if not os.path.exists(acdc_data_path):
-        print(
-            f"Full ACDC dataset not found at {acdc_data_path}, using sample dataset..."
+    # Fast path: if already loaded, return immediately
+    if _acdc_dataset is not None:
+        return _acdc_dataset
+
+    # Acquire lock to ensure only one thread initializes
+    with _acdc_lock:
+        # Double-check pattern: dataset might have been loaded while waiting for lock
+        if _acdc_dataset is not None:
+            return _acdc_dataset
+
+        # Path to ACDC data relative to the service root
+        # Try full dataset first, fallback to sample dataset
+        acdc_data_path = "./data/acdc_full/ACDC_preprocessed/ACDC_training_slices"
+
+        if not os.path.exists(acdc_data_path):
+            print(
+                f"Full ACDC dataset not found at {acdc_data_path}, using sample dataset..."
+            )
+            acdc_data_path = "./data/acdc"
+
+        # Check if data exists
+        if not os.path.exists(acdc_data_path):
+            raise FileNotFoundError(
+                f"ACDC dataset not found at {acdc_data_path}. "
+                "Please ensure the H5 files are placed in the correct directory."
+            )
+
+        # Optional: Define transforms for additional preprocessing
+        # Images are already normalized to [0, 1] in the H5 files
+        transform = None  # Can add transforms here if needed
+
+        # Create and return the dataset
+        acdc_dataset = ACDCDataset(
+            root_dir=acdc_data_path,
+            target_size=(256, 256),  # Standard size for ACDC
+            transform=transform,
         )
-        acdc_data_path = "./data/acdc"
 
-    # Check if data exists
-    if not os.path.exists(acdc_data_path):
-        raise FileNotFoundError(
-            f"ACDC dataset not found at {acdc_data_path}. "
-            "Please ensure the H5 files are placed in the correct directory."
-        )
-
-    # Optional: Define transforms for additional preprocessing
-    # Images are already normalized to [0, 1] in the H5 files
-    transform = None  # Can add transforms here if needed
-
-    # Create and return the dataset
-    acdc_dataset = ACDCDataset(
-        root_dir=acdc_data_path,
-        target_size=(256, 256),  # Standard size for ACDC
-        transform=transform,
-    )
-
-    return acdc_dataset
+        _acdc_dataset = acdc_dataset
+        return acdc_dataset
