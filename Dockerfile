@@ -20,11 +20,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy the rest of the code
-COPY . .
-
-# Expose the gRPC port
-EXPOSE 50051
+# Copy only the application source code
+COPY src/ ./src/
 
 # Set the entrypoint
-CMD ["python", "src/main.py"] 
+CMD ["python", "-m", "src.main"] 
