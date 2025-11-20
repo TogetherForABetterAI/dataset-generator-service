@@ -1,37 +1,50 @@
-import psycopg2
-import psycopg2.extras
 import logging
 from typing import Optional
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import NullPool
 from src.config.config import DatabaseConfig
+from models.batch import Base
 
 logger = logging.getLogger(__name__)
 
 
 class DatabaseClient:
     """
-    PostgreSQL database client using psycopg2.
-    Manages connection pooling and provides a context manager for transactions.
+    PostgreSQL database client using SQLAlchemy.
+    Each worker process should create its own DatabaseClient instance.
+    Uses NullPool to avoid connection sharing issues in multiprocessing.
     """
 
     def __init__(self, config: DatabaseConfig):
         self.config = config
-        self.connection: Optional[psycopg2.extensions.connection] = None
+        self.engine = None
+        self.SessionLocal = None
 
     def connect(self):
-        """Establish connection to PostgreSQL database"""
+        """Establish connection to PostgreSQL database and create session factory"""
         try:
+            connection_string = (
+                f"postgresql://{self.config.user}:{self.config.password}"
+                f"@{self.config.host}:{self.config.port}/{self.config.dbname}"
+            )
+
             logger.info(
                 f"Connecting to PostgreSQL at {self.config.host}:{self.config.port}/{self.config.dbname}"
             )
-            self.connection = psycopg2.connect(
-                host=self.config.host,
-                port=self.config.port,
-                user=self.config.user,
-                password=self.config.password,
-                dbname=self.config.dbname,
+
+            # Use NullPool for multiprocessing safety (no connection pooling)
+            self.engine = create_engine(
+                connection_string,
+                poolclass=NullPool,
+                echo=False,  # Set to True for SQL query logging
             )
-            # Set autocommit to False for explicit transaction management
-            self.connection.autocommit = False
+
+            # Create session factory
+            self.SessionLocal = sessionmaker(
+                autocommit=False, autoflush=False, bind=self.engine
+            )
+
             logger.info("Successfully connected to PostgreSQL")
 
             # Initialize the schema
@@ -42,75 +55,46 @@ class DatabaseClient:
             raise
 
     def _initialize_schema(self):
-        """Create the batches table if it doesn't exist"""
+        """Create all tables if they don't exist"""
         try:
-            with self.connection.cursor() as cursor:
-                create_table_sql = """
-                CREATE TABLE IF NOT EXISTS batches (
-                    session_id VARCHAR(255) NOT NULL,
-                    batch_index INTEGER NOT NULL,
-                    data_payload BYTEA NOT NULL,
-                    labels JSON NOT NULL,
-                    isEnqueued BOOLEAN NOT NULL DEFAULT FALSE,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (session_id, batch_index)
-                );
-                
-                CREATE INDEX IF NOT EXISTS idx_batches_session_id 
-                ON batches(session_id);
-                
-                CREATE INDEX IF NOT EXISTS idx_batches_isenqueued 
-                ON batches(isEnqueued);
-                """
-                cursor.execute(create_table_sql)
-                self.connection.commit()
-                logger.info("Database schema initialized successfully")
+            Base.metadata.create_all(bind=self.engine)
+            logger.info("Database schema initialized successfully")
         except Exception as e:
-            self.connection.rollback()
             logger.error(f"Failed to initialize schema: {e}")
             raise
 
-    def get_cursor(self):
-        """Get a database cursor for executing queries"""
-        if self.connection is None or self.connection.closed:
+    def get_session(self) -> Session:
+        """
+        Get a new database session.
+        The caller is responsible for closing the session.
+
+        Returns:
+            SQLAlchemy Session instance
+        """
+        if self.SessionLocal is None:
             self.connect()
-        return self.connection.cursor()
-
-    def commit(self):
-        """Commit the current transaction"""
-        if self.connection:
-            self.connection.commit()
-            logger.debug("Transaction committed")
-
-    def rollback(self):
-        """Rollback the current transaction"""
-        if self.connection:
-            self.connection.rollback()
-            logger.warning("Transaction rolled back")
+        return self.SessionLocal()
 
     def close(self):
-        """Close the database connection"""
-        if self.connection and not self.connection.closed:
+        """Close the database engine"""
+        if self.engine:
             try:
-                self.connection.close()
-                logger.info("Database connection closed")
+                self.engine.dispose()
+                logger.info("Database engine disposed")
             except Exception as e:
-                logger.error(f"Error closing database connection: {e}")
+                logger.error(f"Error disposing database engine: {e}")
 
     def is_connected(self) -> bool:
-        """Check if the connection is active"""
-        return self.connection is not None and not self.connection.closed
+        """Check if the engine is active"""
+        return self.engine is not None
 
     def __enter__(self):
-        """Context manager entry"""
+        """Context manager entry - returns a new session"""
         if not self.is_connected():
             self.connect()
-        return self
+        return self.get_session()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit with automatic rollback on exception"""
-        if exc_type is not None:
-            self.rollback()
-        else:
-            self.commit()
+        """Context manager exit - session is managed by caller"""
+        # Session closing is handled by the session context manager
         return False

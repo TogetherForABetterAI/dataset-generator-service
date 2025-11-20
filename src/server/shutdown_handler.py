@@ -13,13 +13,13 @@ class ShutdownHandler:
     Follows the Go ShutdownHandler pattern exactly.
 
     Orchestrates shutdown based on two possible triggers:
-    1. Server error/completion (server_done queue)
+    1. Server error/completion (server_done)
     2. OS signal (SIGTERM/SIGINT)
     """
 
     def __init__(
         self,
-        listener,  
+        listener,
         middleware: RabbitMQMiddleware,
         db_client: DatabaseClient,
     ):
@@ -35,73 +35,34 @@ class ShutdownHandler:
         self.middleware = middleware
         self.db_client = db_client
 
-    def handle_shutdown(
-        self, server_done: queue.Queue, os_signals: queue.Queue
-    ) -> Optional[Exception]:
+    def handle_shutdown(self, shutdown_queue: queue.Queue) -> Optional[Exception]:
         """
         Orchestrates graceful shutdown based on shutdown sources.
 
-        Waits for one of two shutdown triggers:
-        1. Server error/completion (server_done)
-        2. OS signal (SIGTERM/SIGINT from Kubernetes or user)
+        Waits (blocks) on a single queue until a shutdown trigger arrives.
+        The queue receives the error (Exception or None) from either:
+        1. Server error/completion
+        2. OS signal handler
 
         Args:
-            server_done: Queue that receives server completion/error
-            os_signals: Queue that receives OS signals
+            shutdown_queue: Single queue that receives shutdown events
 
         Returns:
             Exception if shutdown encountered an error, None otherwise
         """
-        # Wait for one of two shutdown triggers
-        while True:
-            # Check server_done first
-            try:
-                err = server_done.get(block=False)
-                # Server stopped (error or normal completion)
-                logger.info("Server stopped, initiating shutdown")
-                self.shutdown_clients()
-                return self._handle_server_error(err)
-            except queue.Empty:
-                pass
+        # Block here until a shutdown event arrives
+        err: Optional[Exception] = shutdown_queue.get(block=True)
 
-            # Check os_signals
-            try:
-                sig = os_signals.get(block=False)
-                # OS signal received (SIGTERM from Kubernetes or SIGINT from user)
-                if sig is None:
-                    return None
+        logger.info("Shutdown triggered, initiating graceful shutdown")
+        self.shutdown()
 
-                logger.info(f"Received OS signal {sig}, initiating shutdown")
-                self.shutdown_clients()
-
-                # Wait for server to finish after interrupting clients
-                err = server_done.get()
-                return self._handle_server_error(err)
-            except queue.Empty:
-                pass
-
-            # Small sleep to avoid busy waiting
-            import time
-
-            time.sleep(0.1)
-
-    def _handle_server_error(self, err: Optional[Exception]) -> Optional[Exception]:
-        """
-        Handle shutdown when server stops.
-
-        Args:
-            err: Error from server, or None if stopped cleanly
-
-        Returns:
-            The error if present, None otherwise
-        """
         if err is not None:
             logger.error(f"Service stopped with an error: {err}", exc_info=True)
             return err
         logger.info("Service stopped cleanly")
         return None
 
-    def shutdown_clients(self):
+    def shutdown(self):
         """
         Initiates the shutdown of all server components.
         Always interrupts ongoing processing.
@@ -122,7 +83,7 @@ class ShutdownHandler:
         except Exception as e:
             logger.error(f"Error stopping consumer: {e}", exc_info=True)
 
-        # Step 2: Interrupt all active clients/workers
+        # Step 2: Interrupt all active workers
         # This triggers graceful shutdown: workers finish current jobs, then stop
         try:
             logger.info("Interrupting workers...")

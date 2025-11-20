@@ -124,7 +124,7 @@ class Listener:
         logger.info("Stopping Listener...")
         self.running = False
 
-        # Send poison pill to all workers
+        # Notify workers to stop
         logger.info("Sending stop signals to workers...")
         for _ in range(len(self.workers)):
             self.jobs_queue.put(None)
@@ -132,7 +132,7 @@ class Listener:
         # Wait for workers to finish
         logger.info("Waiting for workers to finish...")
         for i, worker in enumerate(self.workers):
-            worker.join(timeout=10)
+            worker.join()
             if worker.is_alive():
                 logger.warning(
                     f"Worker {i} (PID: {worker.pid}) did not stop gracefully, terminating..."

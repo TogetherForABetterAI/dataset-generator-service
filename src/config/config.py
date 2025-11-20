@@ -2,6 +2,9 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
+
+DISPATCHER_EXCHANGE = "dispatcher_exchange"
+
 # Load environment variables from .env file if it exists
 load_dotenv()
 
@@ -39,6 +42,8 @@ class GlobalConfig:
         self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
         self.pod_name: str = os.getenv("POD_NAME", "dataset-service")
         self.worker_pool_size: int = int(os.getenv("WORKER_POOL_SIZE", "10"))
+        self.batch_size: int = int(os.getenv("BATCH_SIZE", "64"))
+        self.batch_commit_size: int = int(os.getenv("BATCH_COMMIT_SIZE", "10"))
 
         self.middleware_config: MiddlewareConfig = MiddlewareConfig()
         self.database_config: DatabaseConfig = DatabaseConfig()
@@ -47,6 +52,12 @@ class GlobalConfig:
         """Validate configuration values"""
         if self.worker_pool_size < 1:
             raise ValueError("WORKER_POOL_SIZE must be at least 1")
+
+        if self.batch_size < 1:
+            raise ValueError("BATCH_SIZE must be at least 1")
+
+        if self.batch_commit_size < 1:
+            raise ValueError("BATCH_COMMIT_SIZE must be at least 1")
 
         if self.middleware_config.max_retries < 0:
             raise ValueError("RABBITMQ_MAX_RETRIES must be non-negative")

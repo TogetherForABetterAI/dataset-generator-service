@@ -228,7 +228,7 @@ class RabbitMQMiddleware:
         This allows graceful shutdown by preventing new messages from being consumed.
 
         Args:
-            consumer_tag: The consumer tag to stop (returned by consume())
+            consumer_tag: The consumer tag to stop)
         """
         try:
             if self.channel and not self.channel.is_closed:

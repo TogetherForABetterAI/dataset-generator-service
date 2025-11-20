@@ -39,7 +39,9 @@ class Worker(multiprocessing.Process):
         self.worker_id = worker_id
         self.config = config
         self.jobs_queue = jobs_queue
-        self.shutdown_requested = False
+
+        # Shutdown coordination queue for cancelling in-progress work
+        self.shutdown_queue = multiprocessing.Queue(maxsize=1)
 
         # Will be initialized in run() (after fork)
         self.middleware: Optional[RabbitMQMiddleware] = None
@@ -47,54 +49,65 @@ class Worker(multiprocessing.Process):
         self.client_manager = None
         self.channel = None
 
+    def _initialize(self):
+        """
+        Initialize worker resources:
+        - RabbitMQ connection and exclusive channel
+        - Database connection
+        - ClientManager with dataset loading and shutdown queue
+        """
+        logger.info(f"Worker {self.worker_id} initializing...")
+
+        # Initialize middleware with exclusive channel
+        self.middleware = RabbitMQMiddleware(self.config.middleware_config)
+        connection = self.middleware.connect()
+        self.channel = self.middleware.create_channel(connection)
+
+        # Initialize database client
+        self.db_client = DatabaseClient(self.config.database_config)
+
+        # Initialize client manager (pass shutdown_queue for cancellation)
+        self.client_manager = ClientManagerFactory.create(
+            batch_size=self.config.batch_size,
+            middleware=self.middleware,
+            db_client=self.db_client,
+            channel=self.channel,
+            shutdown_queue=self.shutdown_queue,
+        )
+
+        logger.info(f"Worker {self.worker_id} initialization complete")
+
     def run(self):
         """
         Main worker loop (runs in the child process).
 
         1. Setup signal handlers for SIGTERM/SIGINT
         2. Initialize connections and datasets
-        3. Process jobs from the queue
-        4. Shutdown gracefully on poison pill or signal
+        3. Process jobs from the queue (blocks until job arrives)
+        4. Shutdown gracefully on poison pill (None)
         """
-        # Set process name for easier debugging
-        import setproctitle
-
-        try:
-            setproctitle.setproctitle(f"dataset-worker-{self.worker_id}")
-        except:
-            pass  # setproctitle is optional
-
-        logger.info(
-            f"Worker {self.worker_id} starting (PID: {multiprocessing.current_process().pid})"
-        )
-
         # Setup signal handlers in this process
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
 
         try:
-            # Initialize connections and datasets
+            # Setup worker
             self._initialize()
 
             # Main job processing loop
-            while not self.shutdown_requested:
+            while True:
                 try:
-                    # Wait for job (blocking with timeout to check shutdown flag)
-                    job = self.jobs_queue.get(timeout=1.0)
+                    # Wait for job
+                    job = self.jobs_queue.get(block=True)
 
-                    # Check for poison pill (None = shutdown signal)
+                    # None = shutdown signal
                     if job is None:
-                        logger.info(
-                            f"Worker {self.worker_id} received shutdown signal (poison pill)"
-                        )
+                        logger.info(f"Worker {self.worker_id} received shutdown signal")
                         break
 
                     # Process the job
                     self._process_job(job)
 
-                except multiprocessing.queues.Empty:
-                    # Timeout - no job available, continue loop
-                    continue
                 except Exception as e:
                     logger.error(
                         f"Worker {self.worker_id} error processing job: {e}",
@@ -112,49 +125,15 @@ class Worker(multiprocessing.Process):
     def _signal_handler(self, signum, frame):
         """
         Handle SIGTERM/SIGINT signals.
-        Sets shutdown flag to exit gracefully after current job.
+        Sends cancellation signal to in-progress work via shutdown_queue.
+        The BatchHandler will check this queue and abort processing.
 
-        Args:
-            signum: Signal number
-            frame: Current stack frame
         """
-        sig_name = signal.Signals(signum).name
-        logger.info(
-            f"Worker {self.worker_id} received {sig_name}, will shutdown after current job"
-        )
-        self.shutdown_requested = True
-
-    def _initialize(self):
-        """
-        Initialize worker resources:
-        - RabbitMQ connection and exclusive channel
-        - Database connection
-        - ClientManager with dataset loading
-        """
-        logger.info(f"Worker {self.worker_id} initializing...")
-
-        # Initialize middleware with exclusive channel
-        self.middleware = RabbitMQMiddleware(self.config.middleware_config)
-        connection = self.middleware.connect()
-        self.channel = self.middleware.create_channel(connection)
-        logger.info(
-            f"Worker {self.worker_id} created exclusive RabbitMQ channel: {self.channel.channel_number}"
-        )
-
-        # Initialize database client
-        self.db_client = DatabaseClient(self.config.database_config)
-        logger.info(f"Worker {self.worker_id} connected to database")
-
-        # Initialize client manager (this loads datasets)
-        logger.info(f"Worker {self.worker_id} loading datasets...")
-        self.client_manager = ClientManagerFactory.create(
-            middleware=self.middleware,
-            db_client=self.db_client,
-            channel=self.channel,
-        )
-        logger.info(f"Worker {self.worker_id} datasets loaded successfully")
-
-        logger.info(f"Worker {self.worker_id} initialization complete")
+        # Send cancellation signal to BatchHandler (if it's processing)
+        try:
+            self.shutdown_queue.put(None, block=False)
+        except:
+            pass
 
     def _process_job(self, job: dict):
         """
@@ -175,7 +154,7 @@ class Worker(multiprocessing.Process):
                 f"client_id={notification.client_id}, session_id={notification.session_id}"
             )
 
-            # Handle the client request (generate batches, save to DB, publish response)
+            # Handle the client request
             result = self.client_manager.handle_client(
                 notification=notification,
                 delivery_tag=delivery_tag,

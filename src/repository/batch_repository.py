@@ -3,68 +3,19 @@ import logging
 from typing import List, Tuple
 import numpy as np
 from src.db.client import DatabaseClient
+from models.batch import Batch
 
 logger = logging.getLogger(__name__)
 
 
 class BatchRepository:
     """
-    Repository pattern for batch data persistence.
+    Repository pattern for batch data persistence using SQLAlchemy.
     Encapsulates all SQL logic for the batches table.
     """
 
     def __init__(self, db_client: DatabaseClient):
         self.db_client = db_client
-
-    def insert_batch(
-        self,
-        session_id: str,
-        batch_index: int,
-        data_payload: np.ndarray,
-        labels: List[int],
-    ) -> bool:
-        """
-        Insert a single batch into the database.
-
-        Args:
-            session_id: The session identifier
-            batch_index: The index of the batch
-            data_payload: The numpy array containing the batch data
-            labels: List of labels for the batch
-
-        Returns:
-            True if insertion was successful, False otherwise
-        """
-        try:
-            # Serialize numpy array to bytes
-            data_bytes = data_payload.tobytes()
-
-            # Convert labels to JSON
-            labels_json = json.dumps(labels)
-
-            insert_sql = """
-                INSERT INTO batches (session_id, batch_index, data_payload, labels, isEnqueued, created_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (session_id, batch_index) DO NOTHING;
-            """
-
-            with self.db_client.get_cursor() as cursor:
-                cursor.execute(
-                    insert_sql,
-                    (session_id, batch_index, data_bytes, labels_json, False),
-                )
-                rows_affected = cursor.rowcount
-
-            logger.debug(
-                f"Inserted batch: session_id={session_id}, batch_index={batch_index}, rows_affected={rows_affected}"
-            )
-            return rows_affected > 0
-
-        except Exception as e:
-            logger.error(
-                f"Failed to insert batch (session_id={session_id}, batch_index={batch_index}): {e}"
-            )
-            raise
 
     def insert_batches_bulk(
         self, session_id: str, batches: List[Tuple[int, np.ndarray, List[int]]]
@@ -79,31 +30,33 @@ class BatchRepository:
         Returns:
             Number of batches successfully inserted
         """
-        inserted_count = 0
+        if not batches:
+            return 0
 
         try:
-            insert_sql = """
-                INSERT INTO batches (session_id, batch_index, data_payload, labels, isEnqueued, created_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (session_id, batch_index) DO NOTHING;
-            """
-
-            with self.db_client.get_cursor() as cursor:
+            with self.db_client.get_session() as db_session:
+                batch_objects = []
                 for batch_index, data_payload, labels in batches:
-                    # Serialize data
+                    # Serialize numpy array to bytes
                     data_bytes = data_payload.tobytes()
-                    labels_json = json.dumps(labels)
 
-                    cursor.execute(
-                        insert_sql,
-                        (session_id, batch_index, data_bytes, labels_json, False),
+                    batch_obj = Batch(
+                        session_id=session_id,
+                        batch_index=batch_index,
+                        data_payload=data_bytes,
+                        labels=labels, 
+                        isEnqueued=False,
                     )
-                    inserted_count += cursor.rowcount
+                    batch_objects.append(batch_obj)
+
+                # Bulk insert
+                db_session.add_all(batch_objects)
+                db_session.commit()
 
             logger.info(
-                f"Bulk insert completed: session_id={session_id}, inserted={inserted_count}/{len(batches)} batches"
+                f"Bulk insert completed: session_id={session_id}, inserted={len(batch_objects)} batches"
             )
-            return inserted_count
+            return len(batch_objects)
 
         except Exception as e:
             logger.error(
@@ -123,24 +76,21 @@ class BatchRepository:
             Tuple of (data_payload_bytes, labels)
         """
         try:
-            select_sql = """
-                SELECT data_payload, labels
-                FROM batches
-                WHERE session_id = %s AND batch_index = %s;
-            """
+            with self.db_client.get_session() as db_session:
+                batch = (
+                    db_session.query(Batch)
+                    .filter(
+                        Batch.session_id == session_id, Batch.batch_index == batch_index
+                    )
+                    .first()
+                )
 
-            with self.db_client.get_cursor() as cursor:
-                cursor.execute(select_sql, (session_id, batch_index))
-                result = cursor.fetchone()
-
-                if result is None:
+                if batch is None:
                     raise ValueError(
                         f"Batch not found: session_id={session_id}, batch_index={batch_index}"
                     )
 
-                data_payload, labels_json = result
-                labels = json.loads(labels_json)
-                return data_payload, labels
+                return batch.data_payload, batch.labels
 
         except Exception as e:
             logger.error(
@@ -159,50 +109,16 @@ class BatchRepository:
             Number of batches
         """
         try:
-            count_sql = """
-                SELECT COUNT(*)
-                FROM batches
-                WHERE session_id = %s;
-            """
-
-            with self.db_client.get_cursor() as cursor:
-                cursor.execute(count_sql, (session_id,))
-                result = cursor.fetchone()
-                return result[0] if result else 0
+            with self.db_client.get_session() as db_session:
+                count = (
+                    db_session.query(Batch)
+                    .filter(Batch.session_id == session_id)
+                    .count()
+                )
+                return count
 
         except Exception as e:
             logger.error(f"Failed to count batches for session_id={session_id}: {e}")
             raise
 
-    def mark_batch_enqueued(self, session_id: str, batch_index: int) -> bool:
-        """
-        Mark a batch as enqueued (isEnqueued = True).
-
-        Args:
-            session_id: The session identifier
-            batch_index: The index of the batch
-
-        Returns:
-            True if update was successful
-        """
-        try:
-            update_sql = """
-                UPDATE batches
-                SET isEnqueued = TRUE
-                WHERE session_id = %s AND batch_index = %s;
-            """
-
-            with self.db_client.get_cursor() as cursor:
-                cursor.execute(update_sql, (session_id, batch_index))
-                rows_affected = cursor.rowcount
-
-            logger.debug(
-                f"Marked batch as enqueued: session_id={session_id}, batch_index={batch_index}"
-            )
-            return rows_affected > 0
-
-        except Exception as e:
-            logger.error(
-                f"Failed to mark batch as enqueued (session_id={session_id}, batch_index={batch_index}): {e}"
-            )
-            raise
+    

@@ -1,182 +1,141 @@
 import logging
 from typing import Dict, Any
-from src.config.config import GlobalConfig
+from src.config.config import DISPATCHER_EXCHANGE, GlobalConfig
 from src.middleware.middleware import RabbitMQMiddleware
 from src.db.client import DatabaseClient
-from src.repository.batch_repository import BatchRepository
 from src.server.batch_handler import BatchHandler
+from src.dataset.mnist_loader import load_mnist
+from src.dataset.acdc_loader import load_acdc
 
 logger = logging.getLogger(__name__)
 
 
-class ClientManager:
+class ClientManagerFactory:
     """
-    Manages the processing of a single client session.
-    Handles batch generation, database persistence, and notification to dispatcher.
-
-    This class is similar to the ClientManager in Go - it encapsulates all the logic
-    for handling a single client/session request.
+    Factory for creating ClientManager functionality with all dependencies.
+    Creates batch handler and provides handle_client function.
     """
 
-    def __init__(
-        self,
-        config: GlobalConfig,
-        channel: Any,  # RabbitMQ channel
+    @staticmethod
+    def create(
+        batch_size: int,
+        batch_commit_size: int,
+        middleware: RabbitMQMiddleware,
         db_client: DatabaseClient,
-        batch_handler: BatchHandler,
-        session_id: str,
+        channel: Any,
+        shutdown_queue: Any,
     ):
         """
-        Initialize a ClientManager for a specific session.
+        Create a ClientManager with all necessary dependencies.
+        Loads datasets once and creates batch handler.
 
         Args:
-            config: Global configuration
-            channel: RabbitMQ channel (exclusive to this worker)
-            db_client: Database client
-            batch_handler: Batch handler for generating batches
-            session_id: The session ID being processed
-        """
-        self.config = config
-        self.channel = channel
-        self.db_client = db_client
-        self.repository = BatchRepository(db_client)
-        self.batch_handler = batch_handler
-        self.session_id = session_id
-        self.stopped = False
-
-    def handle_client(self, notification: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process a client notification: generate batches, save to DB, and notify dispatcher.
-
-        Args:
-            notification: Dictionary containing session_id, dataset_name, batch_size, etc.
+            batch_size: Size of each batch
+            batch_commit_size: Number of batches to accumulate before committing to DB
+            middleware: RabbitMQ middleware instance
+            db_client: Database client instance
+            channel: RabbitMQ channel
+            shutdown_queue: Queue to signal work cancellation
 
         Returns:
-            Dictionary with processing results including total_batches
-
-        Raises:
-            Exception: If processing fails
+            Dictionary with handle_client function
         """
-        if self.stopped:
-            logger.warning(f"ClientManager for session {self.session_id} was stopped")
-            return {}
+        # Load datasets once (shared across all requests)
+        logger.info("Loading datasets...")
+        datasets = {
+            "mnist": load_mnist(),
+            "acdc": load_acdc(),
+        }
+        logger.info(f"Datasets loaded: {list(datasets.keys())}")
 
-        dataset_name = notification.get("dataset_name", "mnist")
-        batch_size = notification.get("batch_size", 64)
+        # Create batch handler with DB access for incremental saves
+        batch_handler = BatchHandler(
+            datasets=datasets,
+            shutdown_queue=shutdown_queue,
+            db_client=db_client,
+            batch_commit_size=batch_commit_size,
+        )
+
+        return {
+            "handle_client": lambda notification, delivery_tag: ClientManagerFactory._handle_client(
+                notification=notification,
+                delivery_tag=delivery_tag,
+                batch_size=batch_size,
+                middleware=middleware,
+                channel=channel,
+                batch_handler=batch_handler,
+            )
+        }
+
+    @staticmethod
+    def _handle_client(
+        notification,
+        delivery_tag: int,
+        batch_size: int,
+        middleware: RabbitMQMiddleware,
+        channel: Any,
+        batch_handler: BatchHandler,
+    ) -> Dict[str, Any]:
+        """
+        Handle a client request: generate batches and save to DB (done by batch_handler),
+        then publish response and ACK.
+
+        Args:
+            notification: ConnectNotification with session_id, model_type (ACDC/MNIST), etc.
+            delivery_tag: RabbitMQ delivery tag for ACK
+            batch_size: Batch size from config
+            middleware: RabbitMQ middleware
+            channel: RabbitMQ channel
+            batch_handler: Batch handler that generates and saves batches
+
+        Returns:
+            Dictionary with processing results
+        """
+        session_id = notification.session_id
+        model_type = notification.model_type
+
+        if not model_type:
+            raise ValueError("model_type is required in notification")
 
         logger.info(
-            f"ClientManager: Processing session_id={self.session_id}, "
-            f"dataset={dataset_name}, batch_size={batch_size}"
+            f"ClientManager: Processing session_id={session_id}, "
+            f"model_type={model_type}, batch_size={batch_size}"
         )
 
         try:
-            # Generate all batches
-            batches, num_batches = self.batch_handler.generate_batches(
-                dataset_name, batch_size
+            # Generate and save batches incrementally
+            total_batches = batch_handler.generate_batches(
+                session_id=session_id, model_type=model_type, batch_size=batch_size
             )
 
-            if self.stopped:
-                logger.warning(
-                    f"ClientManager for session {self.session_id} stopped during batch generation"
-                )
-                return {}
+            # Check if generation was cancelled
+            if total_batches is None:
+                logger.warning(f"Batch generation cancelled for session {session_id}")
+                # NACK message on cancellation
+                channel.basic_nack(delivery_tag=delivery_tag, requeue=True)
+                return {"status": "cancelled"}
 
-            # Save batches to database in a single transaction
-            logger.info(
-                f"ClientManager: Saving {num_batches} batches for session {self.session_id}"
-            )
-            self._save_batches(batches)
-
-            if self.stopped:
-                logger.warning(
-                    f"ClientManager for session {self.session_id} stopped during save"
-                )
-                return {}
-
-            logger.info(
-                f"ClientManager: Successfully completed processing for session {self.session_id}"
-            )
-
-            # Return results
-            return {
-                "session_id": self.session_id,
-                "dataset_name": dataset_name,
-                "total_batches": num_batches,
+            # Publish response to dispatcher and ACK original message (atomic)
+            response_message = {
+                "session_id": session_id,
+                "client_id": notification.client_id,
+                "total_batches": total_batches,
                 "status": "ready",
             }
 
-        except Exception as e:
-            logger.error(
-                f"ClientManager: Failed to process session {self.session_id}: {e}"
+            middleware.publish_with_transaction(
+                channel=channel,
+                exchange=DISPATCHER_EXCHANGE,
+                routing_key="",
+                message=response_message,
+                delivery_tag=delivery_tag,
             )
-            raise
 
-    def _save_batches(self, batches: list) -> None:
-        """
-        Save all batches to the database in a single transaction.
+            logger.info(f"Successfully completed session {session_id}")
+            return {"status": "completed", "batches_generated": total_batches}
 
-        Args:
-            batches: List of tuples (batch_index, batch_data, labels)
-        """
-        try:
-            with self.db_client:  # Uses context manager for transaction
-                inserted = self.repository.insert_batches_bulk(self.session_id, batches)
-                logger.info(
-                    f"ClientManager: Saved {inserted}/{len(batches)} batches for session {self.session_id}"
-                )
         except Exception as e:
-            logger.error(
-                f"ClientManager: Failed to save batches for session {self.session_id}: {e}"
-            )
+            logger.error(f"Error processing session {session_id}: {e}", exc_info=True)
+            # NACK message on error
+            channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
             raise
-
-    def stop(self) -> None:
-        """
-        Signal this ClientManager to stop processing.
-        This is called during graceful shutdown.
-        """
-        logger.info(f"ClientManager: Stop requested for session {self.session_id}")
-        self.stopped = True
-
-
-class ClientManagerFactory:
-    """
-    Factory for creating ClientManager instances.
-    This allows for dependency injection and easier testing.
-    """
-
-    def __init__(self, config: GlobalConfig, batch_handler: BatchHandler):
-        """
-        Initialize the factory with shared dependencies.
-
-        Args:
-            config: Global configuration
-            batch_handler: Shared batch handler instance
-        """
-        self.config = config
-        self.batch_handler = batch_handler
-
-    def create(
-        self,
-        channel: Any,
-        db_client: DatabaseClient,
-        session_id: str,
-    ) -> ClientManager:
-        """
-        Create a new ClientManager instance.
-
-        Args:
-            channel: RabbitMQ channel
-            db_client: Database client
-            session_id: Session ID for this client
-
-        Returns:
-            A new ClientManager instance
-        """
-        return ClientManager(
-            config=self.config,
-            channel=channel,
-            db_client=db_client,
-            batch_handler=self.batch_handler,
-            session_id=session_id,
-        )

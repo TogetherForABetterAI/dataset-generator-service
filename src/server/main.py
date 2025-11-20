@@ -46,9 +46,8 @@ class Server:
             db_client=self.db_client,
         )
 
-        # Shutdown coordination channels (Go pattern using Queues)
-        self.server_done = queue.Queue(maxsize=1)  # Server completion/error channel
-        self.os_signals = queue.Queue(maxsize=1)  # OS signal channel
+        # Shutdown coordination queue (single queue for both sources)
+        self.shutdown_queue = queue.Queue(maxsize=2)  # Can hold both events if needed
 
         logger.info(
             f"Server initialized successfully (Pod: {config.pod_name}, "
@@ -61,7 +60,7 @@ class Server:
         This method blocks until the server is stopped.
 
         Follows Go pattern:
-        1. Setup signal handlers that write to os_signals queue
+        1. Setup signal handlers that write to shutdown_queue
         2. Start server components in background thread
         3. Call shutdown_handler.handle_shutdown() which blocks until shutdown trigger
         """
@@ -78,19 +77,16 @@ class Server:
             )
             logger.info("=" * 60)
 
-            # Setup signal handlers that write to os_signals queue
+            # Setup signal handlers that write to shutdown_queue
             self._setup_signal_handlers()
 
             # Start the server components in a separate thread
-            # This thread will put to server_done when it completes or errors
+            # This thread will put to shutdown_queue when it completes or errors
             server_thread = threading.Thread(target=self._run_server, daemon=False)
             server_thread.start()
 
-            # Block here waiting for shutdown trigger
-            # This mimics Go's select on serverDone/osSignals channels
-            err = self.shutdown_handler.handle_shutdown(
-                self.server_done, self.os_signals
-            )
+            # Block here waiting for shutdown trigger (mimics Go's select)
+            err = self.shutdown_handler.handle_shutdown(self.shutdown_queue)
 
             # Wait for server thread to finish
             server_thread.join(timeout=30)
@@ -110,16 +106,17 @@ class Server:
     def _setup_signal_handlers(self):
         """
         Setup signal handlers for SIGTERM and SIGINT.
-        Signals are written to the os_signals queue.
+        When a signal is received, None is put in shutdown_queue (clean shutdown).
         """
 
         def signal_handler(signum, frame):
             sig_name = signal.Signals(signum).name
             logger.info(f"Received signal {sig_name}")
             try:
-                self.os_signals.put(sig_name, block=False)
+                # Signal means clean shutdown (no error)
+                self.shutdown_queue.put(None, block=False)
             except queue.Full:
-                logger.warning("os_signals queue is full, signal already pending")
+                logger.warning("shutdown_queue is full, signal already pending")
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
@@ -128,7 +125,7 @@ class Server:
     def _run_server(self):
         """
         Run the server components in background thread.
-        Puts completion/error to server_done queue.
+        Puts the error (or None if clean) to shutdown_queue.
         """
         err: Optional[Exception] = None
         try:
@@ -140,17 +137,10 @@ class Server:
             logger.error(f"Error in server components: {e}", exc_info=True)
             err = e
         finally:
-            # Put error or None to server_done
+            # Put error to shutdown_queue
             try:
-                self.server_done.put(err, block=False)
+                self.shutdown_queue.put(err, block=False)
             except queue.Full:
-                logger.warning("server_done queue already has a value")
-
-    def stop(self):
-        """
-        Stop the server gracefully.
-        This is called by the shutdown handler.
-        """
-        logger.info("Stopping Dataset Generation Service...")
-        self.shutdown_handler.shutdown_clients()
-        logger.info("Dataset Generation Service stopped")
+                logger.warning(
+                    "shutdown_queue is full, server completion event not sent"
+                )
