@@ -29,7 +29,7 @@ def main():
 
         logger = logging.getLogger(__name__)
         logger.info("=" * 60)
-        logger.info("Dataset Generation Service")
+        logger.info("Dataset Generator Service")
         logger.info("=" * 60)
 
         # Create and start server
