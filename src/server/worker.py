@@ -25,7 +25,11 @@ class Worker(multiprocessing.Process):
     """
 
     def __init__(
-        self, worker_id: int, config: GlobalConfig, jobs_queue: multiprocessing.Queue
+        self,
+        worker_id: int,
+        config: GlobalConfig,
+        jobs_queue: multiprocessing.Queue,
+        shared_datasets,
     ):
         """
         Initialize the worker.
@@ -34,11 +38,13 @@ class Worker(multiprocessing.Process):
             worker_id: Unique identifier for this worker
             config: Global configuration
             jobs_queue: Queue to receive jobs from the listener
+            shared_datasets: Shared datasets in memory (read-only)
         """
         super().__init__()
         self.worker_id = worker_id
         self.config = config
         self.jobs_queue = jobs_queue
+        self.shared_datasets = shared_datasets
 
         # Shutdown coordination queue for cancelling in-progress work
         self.shutdown_queue = multiprocessing.Queue(maxsize=1)
@@ -54,7 +60,7 @@ class Worker(multiprocessing.Process):
         Initialize worker resources:
         - RabbitMQ connection and exclusive channel
         - Database connection
-        - ClientManager with dataset loading and shutdown queue
+        - ClientManager with shared datasets and shutdown queue
         """
         logger.info(f"Worker {self.worker_id} initializing...")
 
@@ -66,13 +72,15 @@ class Worker(multiprocessing.Process):
         # Initialize database client
         self.db_client = DatabaseClient(self.config.database_config)
 
-        # Initialize client manager (pass shutdown_queue for cancellation)
+        # Initialize client manager (pass shared_datasets and shutdown_queue)
         self.client_manager = ClientManagerFactory.create(
             batch_size=self.config.batch_size,
+            batch_commit_size=self.config.batch_commit_size,
             middleware=self.middleware,
             db_client=self.db_client,
             channel=self.channel,
             shutdown_queue=self.shutdown_queue,
+            shared_datasets=self.shared_datasets,
         )
 
         logger.info(f"Worker {self.worker_id} initialization complete")

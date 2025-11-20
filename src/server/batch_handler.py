@@ -16,7 +16,7 @@ class BatchHandler:
 
     def __init__(
         self,
-        datasets: Dict[str, Any],
+        shared_datasets,
         db_client,
         batch_commit_size: int,
         shutdown_queue: queue.Queue,
@@ -25,12 +25,12 @@ class BatchHandler:
         Initialize the BatchHandler.
 
         Args:
-            datasets: Dictionary mapping dataset names to dataset objects
+            shared_datasets: SharedDatasets object with read-only datasets
             db_client: Database client for transactions
             batch_commit_size: Number of batches to accumulate before committing to DB
             shutdown_queue: Queue to check for cancellation signals (None in queue = cancel)
         """
-        self.datasets = datasets
+        self.shared_datasets = shared_datasets
         self.shutdown_queue = shutdown_queue
         self.db_client = db_client
         self.batch_commit_size = batch_commit_size
@@ -45,8 +45,7 @@ class BatchHandler:
     ) -> Optional[int]:
         """
         Generate all batches for a given dataset and save them incrementally to DB.
-        Saves every N batches (batch_commit_size) to avoid large transactions.
-        Checks shutdown_queue periodically and cancels if signal received.
+        Reads from shared memory datasets (read-only).
 
         Args:
             session_id: Session ID to associate with the batches
@@ -59,59 +58,58 @@ class BatchHandler:
         Raises:
             ValueError: If dataset not found
         """
-        # Lookup dataset by model_type (case-insensitive)
-        dataset_key = model_type.lower()
-        dataset = self.datasets.get(dataset_key)
-        if dataset is None:
-            raise ValueError(f"Dataset for model_type '{model_type}' not found")
+        # Get dataset from shared memory (read-only)
+        try:
+            data, labels = self.shared_datasets.get_dataset(model_type)
+            total_samples = len(data)
+        except ValueError as e:
+            logger.error(f"Failed to access dataset: {e}")
+            raise
 
-        total_samples = len(dataset)
         num_batches = (total_samples + batch_size - 1) // batch_size
 
         logger.info(
-            f"Generating {num_batches} batches for model_type '{model_type}' "
-            f"(total_samples={total_samples}, batch_size={batch_size}, "
-            f"commit_size={self.batch_commit_size})"
+            f"Generating {num_batches} batches for '{model_type}' "
+            f"({total_samples} samples, batch_size={batch_size}, "
+            f"commit_size={self.batch_commit_size}) from shared memory"
         )
 
         batch_accumulator = []
         total_saved = 0
 
         for batch_idx in range(num_batches):
-            # Check for cancellation signal before processing each batch
+            # Check for cancellation
             if self._check_cancelled():
                 logger.warning(
-                    f"Batch generation cancelled at batch {batch_idx}/{num_batches}, "
-                    f"saved {total_saved} batches so far"
+                    f"Cancelled at batch {batch_idx}/{num_batches}, saved {total_saved}"
                 )
                 return None
 
             start_idx = batch_idx * batch_size
             end_idx = min(start_idx + batch_size, total_samples)
 
-            batch_data, labels = self._extract_batch(dataset, start_idx, end_idx)
-            batch_accumulator.append((batch_idx, batch_data, labels))
+            # Extract batch from shared memory
+            batch_data = data[start_idx:end_idx]
+            batch_labels = labels[start_idx:end_idx].tolist()
 
-            # Commit to DB when accumulator reaches commit_size
+            batch_accumulator.append((batch_idx, batch_data, batch_labels))
+
+            # Commit when reaching commit_size
             if len(batch_accumulator) >= self.batch_commit_size:
                 saved = self._save_batches(session_id, batch_accumulator)
                 total_saved += saved
                 logger.debug(
-                    f"Committed {saved} batches to DB (total: {total_saved}/{num_batches})"
+                    f"Committed {saved} batches (total: {total_saved}/{num_batches})"
                 )
-                batch_accumulator = []  # Clear accumulator
+                batch_accumulator = []
 
-        # Save remaining batches (if any)
+        # Save remaining batches
         if len(batch_accumulator) > 0:
             saved = self._save_batches(session_id, batch_accumulator)
             total_saved += saved
-            logger.debug(
-                f"Committed final {saved} batches to DB (total: {total_saved}/{num_batches})"
-            )
+            logger.debug(f"Committed final {saved} batches (total: {total_saved})")
 
-        logger.info(
-            f"Successfully generated and saved {total_saved} batches for session {session_id}"
-        )
+        logger.info(f"Completed {total_saved} batches for session {session_id}")
         return total_saved
 
     def _save_batches(self, session_id: str, batches: List[Tuple]) -> int:
@@ -155,41 +153,3 @@ class BatchHandler:
             return False
 
         return False
-
-    def _extract_batch(
-        self, dataset: Any, start_idx: int, end_idx: int
-    ) -> Tuple[np.ndarray, List[int]]:
-        """
-        Extract a single batch of data from the dataset.
-
-        Args:
-            dataset: The dataset to extract from
-            start_idx: Starting index (inclusive)
-            end_idx: Ending index (exclusive)
-
-        Returns:
-            Tuple of (batch_data as numpy array, labels as list)
-        """
-        batch_size = end_idx - start_idx
-
-        # Get first sample to determine shape and dtype
-        first_sample = dataset[start_idx][0]
-        if hasattr(first_sample, "numpy"):
-            sample_np = first_sample.numpy()
-            sample_shape = sample_np.shape
-            sample_dtype = sample_np.dtype
-        else:
-            sample_shape = first_sample.shape
-            sample_dtype = first_sample.dtype
-
-        # Pre-allocate arrays for better performance
-        batch_array = np.empty((batch_size,) + sample_shape, dtype=sample_dtype)
-        labels_array = []
-
-        # Fill arrays efficiently
-        for i in range(batch_size):
-            sample, label = dataset[start_idx + i]
-            batch_array[i] = sample.numpy() if hasattr(sample, "numpy") else sample
-            labels_array.append(int(label))
-
-        return batch_array, labels_array

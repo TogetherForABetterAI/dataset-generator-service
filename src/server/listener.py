@@ -16,12 +16,13 @@ class Listener:
     Workers remain idle until they receive work from the jobs queue.
     """
 
-    def __init__(self, config: GlobalConfig):
+    def __init__(self, config: GlobalConfig, shared_datasets=None):
         self.config = config
         self.middleware = RabbitMQMiddleware(config.middleware_config)
         self.workers = []
         self.jobs_queue = multiprocessing.Queue(maxsize=config.worker_pool_size + 10)
         self.consumer_tag = None  # Will be set when consuming starts
+        self.shared_datasets = shared_datasets
 
     def start(self):
         """Start the listener with worker pool"""
@@ -41,7 +42,7 @@ class Listener:
 
             # Create and start worker processes
             for i in range(self.config.worker_pool_size):
-                worker = Worker(i, self.config, self.jobs_queue)
+                worker = Worker(i, self.config, self.jobs_queue, self.shared_datasets)
                 worker.start()
                 self.workers.append(worker)
                 logger.info(f"Started worker process {i} (PID: {worker.pid})")
@@ -55,8 +56,8 @@ class Listener:
             logger.info("Received interrupt signal")
         except Exception as e:
             logger.error(f"Error in listener: {e}", exc_info=True)
-        finally:
             self.stop()
+            raise
 
     def _consume_messages(self, channel):
         """

@@ -1,11 +1,9 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from src.config.config import DISPATCHER_EXCHANGE, GlobalConfig
 from src.middleware.middleware import RabbitMQMiddleware
 from src.db.client import DatabaseClient
 from src.server.batch_handler import BatchHandler
-from src.dataset.mnist_loader import load_mnist
-from src.dataset.acdc_loader import load_acdc
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +22,10 @@ class ClientManagerFactory:
         db_client: DatabaseClient,
         channel: Any,
         shutdown_queue: Any,
+        shared_datasets=None,
     ):
         """
         Create a ClientManager with all necessary dependencies.
-        Loads datasets once and creates batch handler.
 
         Args:
             batch_size: Size of each batch
@@ -36,21 +34,14 @@ class ClientManagerFactory:
             db_client: Database client instance
             channel: RabbitMQ channel
             shutdown_queue: Queue to signal work cancellation
+            shared_datasets: SharedDatasets object with read-only datasets
 
         Returns:
             Dictionary with handle_client function
         """
-        # Load datasets once (shared across all requests)
-        logger.info("Loading datasets...")
-        datasets = {
-            "mnist": load_mnist(),
-            "acdc": load_acdc(),
-        }
-        logger.info(f"Datasets loaded: {list(datasets.keys())}")
-
-        # Create batch handler with DB access for incremental saves
+        # Create batch handler with shared datasets
         batch_handler = BatchHandler(
-            datasets=datasets,
+            shared_datasets=shared_datasets,
             shutdown_queue=shutdown_queue,
             db_client=db_client,
             batch_commit_size=batch_commit_size,
