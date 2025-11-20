@@ -3,7 +3,7 @@ import logging
 from typing import List, Tuple
 import numpy as np
 from src.db.client import DatabaseClient
-from models.batch import Batch
+from src.schemas.batch import Batch
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class BatchRepository:
                         session_id=session_id,
                         batch_index=batch_index,
                         data_payload=data_bytes,
-                        labels=labels, 
+                        labels=labels,
                         isEnqueued=False,
                     )
                     batch_objects.append(batch_obj)
@@ -120,5 +120,3 @@ class BatchRepository:
         except Exception as e:
             logger.error(f"Failed to count batches for session_id={session_id}: {e}")
             raise
-
-    
