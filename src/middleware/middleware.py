@@ -183,6 +183,7 @@ class RabbitMQMiddleware:
         queue: str,
         callback: Callable,
         auto_ack: bool = False,
+        consumer_tag: str = "",
     ) -> str:
         """
         Start consuming messages from a queue.
@@ -192,13 +193,19 @@ class RabbitMQMiddleware:
             queue: The queue name
             callback: Callback function to process messages
             auto_ack: Whether to auto-acknowledge messages (should be False for manual ACK)
+            consumer_tag: Custom consumer tag (e.g., POD_NAME). If empty, RabbitMQ auto-generates one.
 
         Returns:
-            consumer_tag: The consumer tag assigned by RabbitMQ
+            consumer_tag: The consumer tag assigned by RabbitMQ or the provided one
         """
-        logger.info(f"Starting to consume from queue: {queue}")
+        logger.info(
+            f"Starting to consume from queue: {queue} with consumer_tag: {consumer_tag or 'auto-generated'}"
+        )
         consumer_tag = channel.basic_consume(
-            queue=queue, on_message_callback=callback, auto_ack=auto_ack
+            queue=queue,
+            on_message_callback=callback,
+            auto_ack=auto_ack,
+            consumer_tag=consumer_tag,  # Pass custom tag or empty for auto-generation
         )
 
         logger.info(f"Consumer started with tag: {consumer_tag}")
