@@ -33,17 +33,12 @@ class Server:
         # Initialize middleware
         self.middleware = RabbitMQMiddleware(config.middleware_config)
 
-        # Initialize database client
-        self.db_client = DatabaseClient(config.database_config)
-
         # Initialize listener
         self.listener = Listener(config)
 
         # Initialize shutdown handler
         self.shutdown_handler = ShutdownHandler(
             listener=self.listener,
-            middleware=self.middleware,
-            db_client=self.db_client,
         )
 
         # Shutdown coordination queue (single queue for both sources)
@@ -85,11 +80,11 @@ class Server:
             server_thread = threading.Thread(target=self._run_server, daemon=False)
             server_thread.start()
 
-            # Block here waiting for shutdown trigger (mimics Go's select)
+            # Block here waiting for shutdown trigger
             err = self.shutdown_handler.handle_shutdown(self.shutdown_queue)
 
             # Wait for server thread to finish
-            server_thread.join(timeout=30)
+            server_thread.join()
 
             if err is not None:
                 logger.error(f"Server stopped with error: {err}")

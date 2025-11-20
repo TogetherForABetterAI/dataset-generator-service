@@ -1,8 +1,6 @@
 import logging
 import queue
 from typing import Optional
-from src.middleware.middleware import RabbitMQMiddleware
-from src.db.client import DatabaseClient
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +18,6 @@ class ShutdownHandler:
     def __init__(
         self,
         listener,
-        middleware: RabbitMQMiddleware,
-        db_client: DatabaseClient,
     ):
         """
         Initialize the shutdown handler.
@@ -32,8 +28,6 @@ class ShutdownHandler:
             db_client: The database client to close
         """
         self.listener = listener
-        self.middleware = middleware
-        self.db_client = db_client
 
     def handle_shutdown(self, shutdown_queue: queue.Queue) -> Optional[Exception]:
         """
@@ -75,34 +69,6 @@ class ShutdownHandler:
         """
         logger.info("Shutting down server components...")
 
-        # Step 1: Stop consuming new messages from RabbitMQ
-        try:
-            consumer_tag = self.listener.get_consumer_tag()
-            logger.info(f"Stopping consumer with tag: {consumer_tag}")
-            self.middleware.stop_consuming(consumer_tag)
-        except Exception as e:
-            logger.error(f"Error stopping consumer: {e}", exc_info=True)
-
-        # Step 2: Interrupt all active workers
-        # This triggers graceful shutdown: workers finish current jobs, then stop
-        try:
-            logger.info("Interrupting workers...")
-            self.listener.interrupt_workers()
-        except Exception as e:
-            logger.error(f"Error interrupting workers: {e}", exc_info=True)
-
-        # Step 3: Close middleware connection
-        try:
-            logger.info("Closing middleware...")
-            self.middleware.close()
-        except Exception as e:
-            logger.error(f"Error closing middleware: {e}", exc_info=True)
-
-        # Step 4: Close database connection pool
-        try:
-            logger.info("Closing database client...")
-            self.db_client.close()
-        except Exception as e:
-            logger.error(f"Error closing database: {e}", exc_info=True)
+        self.listener.stop()
 
         logger.info("Server shutdown complete")
