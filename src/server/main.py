@@ -125,17 +125,15 @@ class Server:
         err: Optional[Exception] = None
         try:
             logger.info("Starting listener...")
-            # This blocks until listener stops
-            self.listener.start()
-            logger.info("Listener stopped normally")
+            self.listener.start() # This blocks until listener stops
         except Exception as e:
             logger.error(f"Error in server components: {e}", exc_info=True)
             err = e
-        finally:
-            # Put error to shutdown_queue
             try:
                 self.shutdown_queue.put(err, block=False)
             except queue.Full:
                 logger.warning(
                     "shutdown_queue is full, server completion event not sent"
                 )
+            raise
+        
