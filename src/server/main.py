@@ -8,6 +8,9 @@ from src.server.listener import Listener
 from src.server.shutdown_handler import ShutdownHandler
 from src.middleware.middleware import RabbitMQMiddleware
 from src.db.client import DatabaseClient
+from src.dataset.shared_dataset import SharedDatasets
+from src.dataset.mnist_loader import load_mnist
+from src.dataset.acdc_loader import load_acdc
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +33,31 @@ class Server:
         """
         self.config = config
 
+        # Load datasets into shared memory (ONCE in parent process)
+        logger.info("Loading datasets into shared memory...")
+        self.shared_datasets = SharedDatasets()
+
+        # Load MNIST
+        try:
+            self.shared_datasets.add_dataset("mnist", load_mnist)
+        except Exception as e:
+            logger.error(f"Failed to load MNIST dataset: {e}")
+
+        # Load ACDC
+        try:
+            self.shared_datasets.add_dataset("acdc", load_acdc)
+        except Exception as e:
+            logger.error(f"Failed to load ACDC dataset: {e}")
+
+        logger.info(
+            f"Shared datasets loaded: {self.shared_datasets.get_available_datasets()}"
+        )
+
         # Initialize middleware
         self.middleware = RabbitMQMiddleware(config.middleware_config)
 
-        # Initialize listener
-        self.listener = Listener(config)
+        # Initialize listener (pass shared_datasets to workers)
+        self.listener = Listener(config, self.shared_datasets)
 
         # Initialize shutdown handler
         self.shutdown_handler = ShutdownHandler(
@@ -125,7 +148,7 @@ class Server:
         err: Optional[Exception] = None
         try:
             logger.info("Starting listener...")
-            self.listener.start() # This blocks until listener stops
+            self.listener.start()  # This blocks until listener stops
         except Exception as e:
             logger.error(f"Error in server components: {e}", exc_info=True)
             err = e
@@ -136,4 +159,3 @@ class Server:
                     "shutdown_queue is full, server completion event not sent"
                 )
             raise
-        
