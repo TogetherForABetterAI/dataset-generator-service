@@ -248,6 +248,49 @@ class RabbitMQMiddleware:
             logger.error(f"Error stopping consumer {consumer_tag}: {e}")
             raise
 
+    def ack_message(self, channel: pika.channel.Channel, delivery_tag: int):
+        """
+        Acknowledge a message.
+
+        Args:
+            channel: The channel to use
+            delivery_tag: The delivery tag of the message to ACK
+        """
+        try:
+            if channel and not channel.is_closed:
+                channel.basic_ack(delivery_tag=delivery_tag)
+                logger.debug(f"ACKed message with delivery_tag={delivery_tag}")
+            else:
+                logger.warning(f"Cannot ACK message: channel is closed")
+        except Exception as e:
+            logger.error(f"Failed to ACK message {delivery_tag}: {e}")
+            raise
+
+    def nack_message(
+        self, channel: pika.channel.Channel, delivery_tag: int, requeue: bool = False
+    ):
+        """
+        Negative acknowledge a message (NACK).
+
+        Args:
+            channel: The channel to use
+            delivery_tag: The delivery tag of the message to NACK
+            requeue: Whether to requeue the message (True) or discard it (False)
+        """
+        try:
+            if channel and not channel.is_closed:
+                channel.basic_nack(delivery_tag=delivery_tag, requeue=requeue)
+                logger.debug(
+                    f"NACKed message with delivery_tag={delivery_tag}, requeue={requeue}"
+                )
+            else:
+                logger.warning(f"Cannot NACK message: channel is closed")
+        except Exception as e:
+            logger.error(
+                f"Failed to NACK message {delivery_tag} (requeue={requeue}): {e}"
+            )
+            raise
+
     def close(self):
         """Close channel and connection gracefully"""
         try:

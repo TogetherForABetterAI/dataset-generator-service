@@ -102,40 +102,35 @@ class ClientManagerFactory:
             f"model_type={model_type}, batch_size={batch_size}"
         )
 
-        try:
-            # Generate and save batches incrementally
-            total_batches = batch_handler.generate_batches(
-                session_id=session_id, model_type=model_type, batch_size=batch_size
+        # Generate and save batches incrementally
+        total_batches = batch_handler.generate_batches(
+            session_id=session_id, model_type=model_type, batch_size=batch_size
+        )
+
+        # Check if generation was cancelled
+        if total_batches is None:
+            logger.warning(f"Batch generation cancelled for session {session_id}")
+            # NACK message on cancellation (requeue for retry)
+            middleware.nack_message(
+                channel=channel, delivery_tag=delivery_tag, requeue=True
             )
+            return {"status": "cancelled"}
 
-            # Check if generation was cancelled
-            if total_batches is None:
-                logger.warning(f"Batch generation cancelled for session {session_id}")
-                # NACK message on cancellation
-                channel.basic_nack(delivery_tag=delivery_tag, requeue=True)
-                return {"status": "cancelled"}
+        # Publish response to dispatcher and ACK original message (atomic)
+        response_message = {
+            "session_id": session_id,
+            "client_id": notification.client_id,
+            "total_batches": total_batches,
+            "status": "ready",
+        }
 
-            # Publish response to dispatcher and ACK original message (atomic)
-            response_message = {
-                "session_id": session_id,
-                "client_id": notification.client_id,
-                "total_batches": total_batches,
-                "status": "ready",
-            }
+        middleware.publish_with_transaction(
+            channel=channel,
+            exchange=DISPATCHER_EXCHANGE,
+            routing_key="",
+            message=response_message,
+            delivery_tag=delivery_tag,
+        )
 
-            middleware.publish_with_transaction(
-                channel=channel,
-                exchange=DISPATCHER_EXCHANGE,
-                routing_key="",
-                message=response_message,
-                delivery_tag=delivery_tag,
-            )
-
-            logger.info(f"Successfully completed session {session_id}")
-            return {"status": "completed", "batches_generated": total_batches}
-
-        except Exception as e:
-            logger.error(f"Error processing session {session_id}: {e}", exc_info=True)
-            # NACK message on error
-            channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
-            raise
+        logger.info(f"Successfully completed session {session_id}")
+        return {"status": "completed", "batches_generated": total_batches}

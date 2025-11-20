@@ -170,14 +170,15 @@ class Worker(multiprocessing.Process):
             logger.error(
                 f"Worker {self.worker_id} error processing job: {e}", exc_info=True
             )
-            # NACK the message if we have the channel
-            if self.channel and not self.channel.is_closed:
-                try:
-                    self.channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
-                except Exception as nack_error:
-                    logger.error(
-                        f"Worker {self.worker_id} failed to NACK message: {nack_error}"
-                    )
+            # NACK the message on error
+            try:
+                self.middleware.nack_message(
+                    channel=self.channel, delivery_tag=delivery_tag, requeue=False
+                )
+            except Exception as nack_error:
+                logger.error(
+                    f"Worker {self.worker_id} failed to NACK message: {nack_error}"
+                )
 
     def _cleanup(self):
         """
@@ -186,15 +187,6 @@ class Worker(multiprocessing.Process):
         - Close database connection
         """
         logger.info(f"Worker {self.worker_id} cleaning up...")
-
-        # Close channel
-        if self.channel:
-            try:
-                if not self.channel.is_closed:
-                    self.channel.close()
-                    logger.info(f"Worker {self.worker_id} closed RabbitMQ channel")
-            except Exception as e:
-                logger.warning(f"Worker {self.worker_id} error closing channel: {e}")
 
         # Close middleware connection
         if self.middleware:

@@ -74,11 +74,15 @@ class Listener:
                     notification = ConnectNotification.from_dict(notification_dict)
                     if not notification.validate():
                         logger.error("Notification missing required fields, rejecting")
-                        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                        self.middleware.nack_message(
+                            channel=ch, delivery_tag=method.delivery_tag, requeue=False
+                        )
                         return
                 except Exception as e:
                     logger.error(f"Failed to parse notification: {e}, rejecting")
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                    self.middleware.nack_message(
+                        channel=ch, delivery_tag=method.delivery_tag, requeue=False
+                    )
                     return
 
                 logger.debug(
@@ -97,7 +101,9 @@ class Listener:
             except Exception as e:
                 logger.error(f"Error in message callback: {e}", exc_info=True)
                 # NACK message on parsing error
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                self.middleware.nack_message(
+                    channel=ch, delivery_tag=method.delivery_tag, requeue=False
+                )
 
         # Start consuming with manual ACK
         # ACK will be done by workers after successful processing
