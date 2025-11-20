@@ -4,10 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dataset-service
+    env_file:
+      - .env
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
-    restart: unless-stopped
     deploy:
       resources:
         limits:
