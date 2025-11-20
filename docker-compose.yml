@@ -1,17 +1,12 @@
 services:
-  dataset-grpc-service:
+  dataset-service:
     build:
       context: .
-      dockerfile: docker/Dockerfile
-    container_name: dataset-grpc-service
-    ports:
-      - "50051:50051"
+      dockerfile: Dockerfile
+    container_name: dataset-service
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
-      - GRPC_POLL_STRATEGY=epoll1
-    volumes:
-      - ./src/pb:/app/src/pb
     restart: unless-stopped
     deploy:
       resources:
