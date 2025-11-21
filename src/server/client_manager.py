@@ -4,6 +4,7 @@ from src.config.config import DISPATCHER_EXCHANGE, GlobalConfig
 from src.middleware.middleware import RabbitMQMiddleware
 from src.db.client import DatabaseClient
 from src.server.batch_handler import BatchHandler
+from src.models.notify_dispatcher import NotifyDispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -107,19 +108,18 @@ class ClientManagerFactory:
             )
             return {"status": "cancelled"}
 
-        # Publish response to dispatcher and ACK original message (atomic)
-        response_message = {
-            "session_id": session_id,
-            "client_id": notification.client_id,
-            "total_batches": total_batches,
-            "status": "ready",
-        }
+        # Create dispatcher notification
+        notify = NotifyDispatcher(
+            client_id=notification.client_id,
+            session_id=session_id,
+        )
 
+        # Publish response to dispatcher and ACK original message (atomic)
         middleware.publish_with_transaction(
             channel=channel,
             exchange=DISPATCHER_EXCHANGE,
             routing_key="",
-            message=response_message,
+            message=notify.to_dict(),
             delivery_tag=delivery_tag,
         )
 
