@@ -112,6 +112,7 @@ class ClientManagerFactory:
         notify = NotifyDispatcher(
             client_id=notification.client_id,
             session_id=session_id,
+            total_batches_generated=total_batches,
         )
 
         # Publish response to dispatcher and ACK original message (atomic)
