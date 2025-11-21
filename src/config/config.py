@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 
 DISPATCHER_EXCHANGE = "dispatcher_exchange"
+NEW_CONNECTIONS_EXCHANGE = "new_connections_exchange"
+CONSUME_QUEUE = "generate_data_queue"
 
 # Load environment variables from .env file if it exists
 load_dotenv()

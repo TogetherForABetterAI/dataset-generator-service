@@ -3,7 +3,12 @@ import time
 import logging
 import json
 from typing import Dict, Any, Optional, Callable
-from src.config.config import MiddlewareConfig
+from src.config.config import (
+    CONSUME_QUEUE,
+    DISPATCHER_EXCHANGE,
+    NEW_CONNECTIONS_EXCHANGE,
+    MiddlewareConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,24 +92,24 @@ class RabbitMQMiddleware:
             # Declare exchanges
             logger.info("Declaring exchange: new_connections")
             channel.exchange_declare(
-                exchange="new_connections", exchange_type="direct", durable=True
+                exchange=NEW_CONNECTIONS_EXCHANGE, exchange_type="direct", durable=True
             )
 
             logger.info("Declaring exchange: dispatcher")
             channel.exchange_declare(
-                exchange="dispatcher", exchange_type="direct", durable=True
+                exchange=DISPATCHER_EXCHANGE, exchange_type="direct", durable=True
             )
 
             # Declare the main queue for this service
             logger.info("Declaring queue: generate_data_queue")
-            channel.queue_declare(queue="generate_data_queue", durable=True)
+            channel.queue_declare(queue=CONSUME_QUEUE, durable=True)
 
             # Bind queue to exchange
             logger.info("Binding generate_data_queue to new_connections exchange")
             channel.queue_bind(
-                queue="generate_data_queue",
-                exchange="new_connections",
-                routing_key="generate_data_queue",
+                exchange=NEW_CONNECTIONS_EXCHANGE,
+                queue=CONSUME_QUEUE,
+                routing_key="",
             )
 
             # Set prefetch count for fair distribution
