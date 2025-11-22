@@ -1,7 +1,7 @@
 """
 Unit tests for src.server.listener.Listener
 
-These tests validate the refactored Listener class behaviors:
+These tests validate the Listener class behaviors:
 - Topology declaration (once at startup)
 - Worker pool lifecycle management (start/stop/graceful shutdown)
 - No message processing (workers consume directly from RabbitMQ)
@@ -41,7 +41,7 @@ def mock_config():
 
 @pytest.fixture
 def mock_middleware():
-    """Create a mock RabbitMQMiddleware"""
+    """Create a mock Middleware"""
     middleware = Mock()
     middleware.connect = Mock(return_value=Mock())
     middleware.create_channel = Mock(return_value=Mock())
@@ -117,7 +117,7 @@ def test_start_declares_topology_once(
     FakeWorker, fake_workers = mock_worker_class
 
     monkeypatch.setattr(
-        "src.server.listener.RabbitMQMiddleware", lambda config: mock_middleware
+        "src.server.listener.Middleware", lambda config: mock_middleware
     )
     monkeypatch.setattr("src.server.listener.Worker", FakeWorker)
 
@@ -138,7 +138,7 @@ def test_start_creates_workers(
     FakeWorker, fake_workers = mock_worker_class
 
     monkeypatch.setattr(
-        "src.server.listener.RabbitMQMiddleware", lambda config: mock_middleware
+        "src.server.listener.Middleware", lambda config: mock_middleware
     )
     monkeypatch.setattr("src.server.listener.Worker", FakeWorker)
 
@@ -158,7 +158,7 @@ def test_start_handles_keyboard_interrupt(
     FakeWorker, fake_workers = mock_worker_class
 
     monkeypatch.setattr(
-        "src.server.listener.RabbitMQMiddleware", lambda config: mock_middleware
+        "src.server.listener.Middleware", lambda config: mock_middleware
     )
     monkeypatch.setattr("src.server.listener.Worker", FakeWorker)
 

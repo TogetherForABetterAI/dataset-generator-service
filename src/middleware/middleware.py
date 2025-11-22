@@ -13,7 +13,7 @@ from src.config.config import (
 logger = logging.getLogger(__name__)
 
 
-class RabbitMQMiddleware:
+class Middleware:
     """
     Middleware to handle all RabbitMQ interactions including:
     - Connection management with retry logic

@@ -6,7 +6,7 @@ from typing import Optional
 from src.config.config import GlobalConfig
 from src.server.listener import Listener
 from src.server.shutdown_handler import ShutdownHandler
-from src.middleware.middleware import RabbitMQMiddleware
+from src.middleware.middleware import Middleware
 from src.db.client import DatabaseClient
 from src.dataset.shared_dataset import SharedDatasets
 from src.dataset.mnist_loader import load_mnist
@@ -54,7 +54,7 @@ class Server:
         )
 
         # Initialize middleware
-        self.middleware = RabbitMQMiddleware(config.middleware_config)
+        self.middleware = Middleware(config.middleware_config)
 
         # Initialize listener (pass shared_datasets to workers)
         self.listener = Listener(config, self.shared_datasets)

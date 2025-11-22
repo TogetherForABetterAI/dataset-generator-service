@@ -66,7 +66,7 @@ def mock_shared_datasets():
 
 @pytest.fixture
 def mock_middleware():
-    """Create a mock RabbitMQMiddleware"""
+    """Create a mock Middleware"""
     middleware = Mock()
     middleware.connect = Mock(return_value=Mock())
     middleware.create_channel = Mock(return_value=Mock())
@@ -182,7 +182,7 @@ def test_initialize_success(
     mock_factory = Mock(return_value=mock_client_manager)
     mock_queue_class = Mock(return_value=Mock())
 
-    monkeypatch.setattr("src.server.worker.RabbitMQMiddleware", mock_middleware_class)
+    monkeypatch.setattr("src.server.worker.Middleware", mock_middleware_class)
     monkeypatch.setattr("src.server.worker.DatabaseClient", mock_db_class)
     monkeypatch.setattr("src.server.worker.ClientManagerFactory.create", mock_factory)
     monkeypatch.setattr("src.server.worker.multiprocessing.Queue", mock_queue_class)
@@ -731,7 +731,7 @@ def test_full_worker_lifecycle(
     mock_queue_class = Mock(return_value=Mock())
     mock_signal = Mock()
 
-    monkeypatch.setattr("src.server.worker.RabbitMQMiddleware", mock_middleware_class)
+    monkeypatch.setattr("src.server.worker.Middleware", mock_middleware_class)
     monkeypatch.setattr("src.server.worker.DatabaseClient", mock_db_class)
     monkeypatch.setattr("src.server.worker.ClientManagerFactory.create", mock_factory)
     monkeypatch.setattr("src.server.worker.multiprocessing.Queue", mock_queue_class)
@@ -783,7 +783,7 @@ def test_callback_integration(
     mock_notification.validate.return_value = True
     mock_from_dict = Mock(return_value=mock_notification)
 
-    monkeypatch.setattr("src.server.worker.RabbitMQMiddleware", mock_middleware_class)
+    monkeypatch.setattr("src.server.worker.Middleware", mock_middleware_class)
     monkeypatch.setattr("src.server.worker.DatabaseClient", mock_db_class)
     monkeypatch.setattr("src.server.worker.ClientManagerFactory.create", mock_factory)
     monkeypatch.setattr("src.server.worker.multiprocessing.Queue", mock_queue_class)

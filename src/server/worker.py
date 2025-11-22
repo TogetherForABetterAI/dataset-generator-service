@@ -4,7 +4,7 @@ import json
 import multiprocessing
 from typing import Optional
 from src.config.config import CONSUME_QUEUE, GlobalConfig
-from src.middleware.middleware import RabbitMQMiddleware
+from src.middleware.middleware import Middleware
 from src.db.client import DatabaseClient
 from src.server.client_manager import ClientManagerFactory
 from src.models.notification import ConnectNotification
@@ -49,7 +49,7 @@ class Worker(multiprocessing.Process):
         self.shutdown_queue = multiprocessing.Queue(maxsize=1)
 
         # Will be initialized in run() (after fork)
-        self.middleware: Optional[RabbitMQMiddleware] = None
+        self.middleware: Optional[Middleware] = None
         self.db_client: Optional[DatabaseClient] = None
         self.client_manager = None
         self.channel = None
@@ -66,7 +66,7 @@ class Worker(multiprocessing.Process):
         logger.info(f"Worker {self.worker_id} initializing...")
 
         # Initialize middleware with exclusive channel
-        self.middleware = RabbitMQMiddleware(self.config.middleware_config)
+        self.middleware = Middleware(self.config.middleware_config)
         connection = self.middleware.connect()
         self.channel = self.middleware.create_channel(connection)
 

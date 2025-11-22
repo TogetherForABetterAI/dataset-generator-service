@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, Optional
 from src.config.config import DISPATCHER_EXCHANGE, GlobalConfig
-from src.middleware.middleware import RabbitMQMiddleware
+from src.middleware.middleware import Middleware
 from src.db.client import DatabaseClient
 from src.server.batch_handler import BatchHandler
 from src.models.notify_dispatcher import NotifyDispatcher
@@ -19,7 +19,7 @@ class ClientManagerFactory:
     def create(
         batch_size: int,
         batch_commit_size: int,
-        middleware: RabbitMQMiddleware,
+        middleware: Middleware,
         db_client: DatabaseClient,
         channel: Any,
         shutdown_queue: Any,
@@ -64,7 +64,7 @@ class ClientManagerFactory:
         notification,
         delivery_tag: int,
         batch_size: int,
-        middleware: RabbitMQMiddleware,
+        middleware: Middleware,
         channel: Any,
         batch_handler: BatchHandler,
     ) -> Dict[str, Any]:

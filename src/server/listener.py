@@ -3,7 +3,7 @@ import multiprocessing
 from typing import Optional
 from src.config.config import GlobalConfig
 from src.server.worker import Worker
-from src.middleware.middleware import RabbitMQMiddleware
+from src.middleware.middleware import Middleware
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class Listener:
         try:
             # Declare topology once before starting workers (idempotent)
             logger.info("Declaring RabbitMQ topology...")
-            middleware = RabbitMQMiddleware(self.config.middleware_config)
+            middleware = Middleware(self.config.middleware_config)
             connection = middleware.connect()
             channel = middleware.create_channel(connection)
             middleware.declare_topology(channel=channel)
