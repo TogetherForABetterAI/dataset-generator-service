@@ -81,23 +81,25 @@ class RabbitMQMiddleware:
         logger.info(f"Created new channel: {channel.channel_number}")
         return channel
 
-    def declare_topology(self, channel: pika.channel.Channel, prefetch_count: int = 1):
+    def declare_topology(self, channel: pika.channel.Channel):
         """
         Declare the complete RabbitMQ topology:
         - Exchanges
         - Queues
         - Bindings
+
+        This should be called once at startup.
         """
         try:
             # Declare exchanges
             logger.info("Declaring exchange: new_connections")
             channel.exchange_declare(
-                exchange=NEW_CONNECTIONS_EXCHANGE, exchange_type="direct", durable=True
+                exchange=NEW_CONNECTIONS_EXCHANGE, exchange_type="fanout", durable=True
             )
 
             logger.info("Declaring exchange: dispatcher")
             channel.exchange_declare(
-                exchange=DISPATCHER_EXCHANGE, exchange_type="direct", durable=True
+                exchange=DISPATCHER_EXCHANGE, exchange_type="fanout", durable=True
             )
 
             # Declare the main queue for this service
@@ -112,14 +114,25 @@ class RabbitMQMiddleware:
                 routing_key="",
             )
 
-            # Set prefetch count for fair distribution
-            channel.basic_qos(prefetch_count=prefetch_count)
-            logger.info(f"Set prefetch_count to {prefetch_count}")
-
             logger.info("Topology declared successfully")
 
         except Exception as e:
             logger.error(f"Failed to declare topology: {e}")
+            raise
+
+    def set_qos(self, channel: pika.channel.Channel, prefetch_count: int = 1):
+        """
+        Set Quality of Service (QoS) for fair message distribution.
+
+        Args:
+            channel: RabbitMQ channel
+            prefetch_count: Number of unacknowledged messages per consumer (default: 1)
+        """
+        try:
+            channel.basic_qos(prefetch_count=prefetch_count)
+            logger.info(f"Set prefetch_count to {prefetch_count}")
+        except Exception as e:
+            logger.error(f"Failed to set QoS: {e}")
             raise
 
     def publish_with_transaction(
