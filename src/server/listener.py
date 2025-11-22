@@ -39,7 +39,7 @@ class Listener:
         )
 
         try:
-            # Declare topology once before starting workers (idempotent)
+            # Declare topology once before starting workers
             logger.info("Declaring RabbitMQ topology...")
             middleware = Middleware(self.config.middleware_config)
             connection = middleware.connect()
@@ -65,10 +65,9 @@ class Listener:
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
-            self.stop()
+            raise
         except Exception as e:
             logger.error(f"Error in listener: {e}", exc_info=True)
-            self.stop()
             raise
 
     def _wait_for_workers(self):
@@ -101,4 +100,3 @@ class Listener:
         for i, worker in enumerate(self.workers):
             worker.join()
             logger.info(f"Worker {i} stopped (PID: {worker.pid})")
-        logger.info("Listener stopped successfully")
