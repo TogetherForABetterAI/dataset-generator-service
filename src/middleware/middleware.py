@@ -257,7 +257,6 @@ class Middleware:
         """
         try:
             if self.channel and not self.channel.is_closed:
-                logger.info(f"Stopping consumer with tag: {consumer_tag}")
                 self.channel.basic_cancel(consumer_tag)
                 logger.info(f"Consumer {consumer_tag} stopped successfully")
             else:

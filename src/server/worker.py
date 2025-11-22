@@ -121,7 +121,6 @@ class Worker(multiprocessing.Process):
             logger.error(f"Worker {self.worker_id} fatal error: {e}", exc_info=True)
         finally:
             self._cleanup()
-            logger.info(f"Worker {self.worker_id} stopped")
 
     def _signal_handler(self, signum, frame):
         """
