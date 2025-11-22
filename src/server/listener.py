@@ -1,160 +1,104 @@
 import logging
-import json
 import multiprocessing
 from typing import Optional
 from src.config.config import GlobalConfig
-from src.middleware.middleware import RabbitMQMiddleware
-from src.models.notification import ConnectNotification
 from src.server.worker import Worker
+from src.middleware.middleware import RabbitMQMiddleware
 
 logger = logging.getLogger(__name__)
 
 
 class Listener:
     """
-    Main listener class that manages the worker pool and message distribution.
-    Workers remain idle until they receive work from the jobs queue.
+    Main listener class that manages the worker pool lifecycle.
+
+    Each worker consumes directly from RabbitMQ with prefetch_count=1,
+    allowing RabbitMQ to distribute messages fairly across the pool.
+
+    The Listener's responsibilities:
+    - Declare RabbitMQ topology once (exchanges, queues, bindings)
+    - Start worker processes
+    - Monitor worker health
+    - Gracefully shutdown workers on SIGTERM
     """
 
     def __init__(self, config: GlobalConfig, shared_datasets=None):
         self.config = config
-        self.middleware = RabbitMQMiddleware(config.middleware_config)
         self.workers = []
-        self.jobs_queue = multiprocessing.Queue(maxsize=config.worker_pool_size + 10)
-        self.consumer_tag = None  # Will be set when consuming starts
         self.shared_datasets = shared_datasets
 
     def start(self):
-        """Start the listener with worker pool"""
+        """
+        Start the listener with worker pool.
+
+        1. Declare RabbitMQ topology once (idempotent)
+        2. Start worker processes (each consumes directly from RabbitMQ)
+        """
         logger.info(
             f"Starting Listener with {self.config.worker_pool_size} worker processes"
         )
 
         try:
-            # Connect to RabbitMQ (main process connection)
-            connection = self.middleware.connect()
-            channel = self.middleware.create_channel(connection)
-
-            # Setup topology (exchange, queue, binding)
-            self.middleware.declare_topology(
-                channel, prefetch_count=self.config.worker_pool_size
-            )
+            # Declare topology once before starting workers (idempotent)
+            logger.info("Declaring RabbitMQ topology...")
+            middleware = RabbitMQMiddleware(self.config.middleware_config)
+            connection = middleware.connect()
+            channel = middleware.create_channel(connection)
+            middleware.declare_topology(channel=channel)
+            middleware.close()
+            logger.info("RabbitMQ topology declared successfully")
 
             # Create and start worker processes
+            # Each worker consumes directly from RabbitMQ with prefetch_count=1
             for i in range(self.config.worker_pool_size):
-                worker = Worker(i, self.config, self.jobs_queue, self.shared_datasets)
+                worker = Worker(i, self.config, self.shared_datasets)
                 worker.start()
                 self.workers.append(worker)
                 logger.info(f"Started worker process {i} (PID: {worker.pid})")
 
-            logger.info("Worker pool started. Workers are idle, waiting for jobs.")
+            logger.info(
+                f"Worker pool started. Each worker consuming from generate_data_queue with prefetch_count=1"
+            )
 
-            # Start consuming messages
-            self._consume_messages(channel)
+            # Wait for all workers to finish (blocks until workers terminate)
+            self._wait_for_workers()
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
+            self.stop()
         except Exception as e:
             logger.error(f"Error in listener: {e}", exc_info=True)
             self.stop()
             raise
 
-    def _consume_messages(self, channel):
+    def _wait_for_workers(self):
         """
-        Consume messages from RabbitMQ and distribute to idle workers via jobs queue.
-        When a message arrives, it's placed in the jobs_queue and an idle worker picks it up.
+        Wait for all worker processes to complete.
+        This blocks until all workers have terminated.
         """
+        for i, worker in enumerate(self.workers):
+            worker.join()
+            logger.info(f"Worker {i} (PID: {worker.pid}) has terminated")
 
-        def callback(ch, method, properties, body):
-            try:
-                # Parse notification
-                notification_dict = json.loads(body)
-
-                # Quick validation using the model
-                try:
-                    notification = ConnectNotification.from_dict(notification_dict)
-                    if not notification.validate():
-                        logger.error("Notification missing required fields, rejecting")
-                        self.middleware.nack_message(
-                            channel=ch, delivery_tag=method.delivery_tag, requeue=False
-                        )
-                        return
-                except Exception as e:
-                    logger.error(f"Failed to parse notification: {e}, rejecting")
-                    self.middleware.nack_message(
-                        channel=ch, delivery_tag=method.delivery_tag, requeue=False
-                    )
-                    return
-
-                logger.debug(
-                    f"Received notification for client_id={notification.client_id}, "
-                    f"session_id={notification.session_id}, adding to jobs queue"
-                )
-
-                # Create job and add to queue
-                # An idle worker will pick this up
-                job = {
-                    "notification": notification_dict,  # Pass as dict to worker
-                    "delivery_tag": method.delivery_tag,
-                }
-                self.jobs_queue.put(job)
-
-            except Exception as e:
-                logger.error(f"Error in message callback: {e}", exc_info=True)
-                # NACK message on parsing error
-                self.middleware.nack_message(
-                    channel=ch, delivery_tag=method.delivery_tag, requeue=False
-                )
-
-        # Start consuming with manual ACK
-        # ACK will be done by workers after successful processing
-        # Use POD_NAME as consumer_tag for Kubernetes pod identification
-        self.consumer_tag = self.middleware.consume(
-            channel=channel,
-            queue="generate_data_queue",
-            callback=callback,
-            auto_ack=False,
-            consumer_tag=self.config.pod_name,
-        )
-
-        logger.info(
-            f"Listening for messages on generate_data_queue "
-            f"(consumer_tag={self.consumer_tag})..."
-        )
-
-        # Start blocking consume loop
-        self.middleware.start_consuming(channel)
+        logger.info("All workers have terminated")
 
     def stop(self):
         """
-        Interrupt all active workers and stop the listener.
-        This is called during graceful shutdown to signal workers to stop.
+        Gracefully stop all workers.
+        Sends SIGTERM to each worker, allowing them to:
+        1. Stop consuming new messages
+        2. Finish current work
+        3. Clean up resources
         """
-        self.middleware.stop_consuming(self.consumer_tag)
-        self._interrupt_workers()
-        self.middleware.close()
-        logger.info("Listener stopped successfully")
-
-    def _interrupt_workers(self):
-        """
-        Interrupt all active workers.
-        This is called during graceful shutdown to signal workers to stop.
-        """
-        logger.info("Interrupting all workers and listener...")
-
-        # If there is any worker without ongoing processing,
-        # signal them to stop
-        logger.info("Sending stop signals to workers...")
-        for _ in range(len(self.workers)):
-            self.jobs_queue.put(None)
-
-        # Notify workers to stop in case they are processing
-        logger.info("Waiting for workers to finish...")
+        logger.info("Sending SIGTERM to all workers...")
         for i, worker in enumerate(self.workers):
-            worker.terminate()
-            logger.info(f"Sent SIGTERM to Worker {i} (PID: {worker.pid})")
+            if worker.is_alive():
+                worker.terminate()
+                logger.info(f"Sent SIGTERM to Worker {i} (PID: {worker.pid})")
 
         # Wait for workers to finish
+        logger.info("Waiting for workers to finish...")
         for i, worker in enumerate(self.workers):
             worker.join()
             logger.info(f"Worker {i} stopped (PID: {worker.pid})")
+        logger.info("Listener stopped successfully")

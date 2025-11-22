@@ -115,12 +115,13 @@ class ClientManagerFactory:
             total_batches_generated=total_batches,
         )
 
-        # Publish response to dispatcher and ACK original message (atomic)
+        # Publish response to dispatcher with transactional ACK
+        # This ensures atomicity: both ACK and Publish succeed or both fail
         middleware.publish_with_transaction(
             channel=channel,
             exchange=DISPATCHER_EXCHANGE,
             routing_key="",
-            message=notify.to_dict(),
+            message=notify.to_dict(),  # Pass dict, not JSON string
             delivery_tag=delivery_tag,
         )
 
