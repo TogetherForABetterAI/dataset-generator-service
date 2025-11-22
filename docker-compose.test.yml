@@ -1,0 +1,76 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq-e2e
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - e2e-network
+
+  postgres:
+    image: postgres:16
+    container_name: postgres-e2e
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dataset_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-e2e-data:/var/lib/postgresql/data
+    networks:
+      - e2e-network
+
+  dataset-generator-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dataset-service-e2e
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - POD_NAME=dataset-service-e2e
+      - WORKER_POOL_SIZE=3
+      - BATCH_SIZE=32
+      - BATCH_COMMIT_SIZE=5
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - RABBITMQ_MAX_RETRIES=5
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=dataset_db
+    networks:
+      - e2e-network
+    volumes:
+      - ./data:/app/data
+
+networks:
+  e2e-network:
+    driver: bridge
+
+volumes:
+  postgres-e2e-data:
