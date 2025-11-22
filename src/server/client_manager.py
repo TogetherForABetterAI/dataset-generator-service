@@ -18,36 +18,22 @@ class ClientManagerFactory:
     @staticmethod
     def create(
         batch_size: int,
-        batch_commit_size: int,
+        batch_handler: BatchHandler,
         middleware: Middleware,
-        db_client: DatabaseClient,
         channel: Any,
-        shutdown_queue: Any,
-        shared_datasets=None,
     ):
         """
         Create a ClientManager with all necessary dependencies.
 
         Args:
             batch_size: Size of each batch
-            batch_commit_size: Number of batches to accumulate before committing to DB
+            batch_handler: BatchHandler instance for generating batches
             middleware: RabbitMQ middleware instance
-            db_client: Database client instance
             channel: RabbitMQ channel
-            shutdown_queue: Queue to signal work cancellation
-            shared_datasets: SharedDatasets object with read-only datasets
 
         Returns:
             Dictionary with handle_client function
         """
-        # Create batch handler with shared datasets
-        batch_handler = BatchHandler(
-            shared_datasets=shared_datasets,
-            shutdown_queue=shutdown_queue,
-            db_client=db_client,
-            batch_commit_size=batch_commit_size,
-        )
-
         return {
             "handle_client": lambda notification, delivery_tag: ClientManagerFactory._handle_client(
                 notification=notification,
@@ -121,7 +107,7 @@ class ClientManagerFactory:
             channel=channel,
             exchange=DISPATCHER_EXCHANGE,
             routing_key="",
-            message=notify.to_dict(),  # Pass dict, not JSON string
+            message=notify.to_dict(),
             delivery_tag=delivery_tag,
         )
 

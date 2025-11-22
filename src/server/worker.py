@@ -7,6 +7,7 @@ from src.config.config import CONSUME_QUEUE, GlobalConfig
 from src.middleware.middleware import Middleware
 from src.db.client import DatabaseClient
 from src.server.client_manager import ClientManagerFactory
+from src.server.batch_handler import BatchHandler
 from src.models.notification import ConnectNotification
 
 logger = logging.getLogger(__name__)
@@ -76,15 +77,20 @@ class Worker(multiprocessing.Process):
         # Initialize database client
         self.db_client = DatabaseClient(self.config.database_config)
 
-        # Initialize client manager (pass shared_datasets and shutdown_queue)
+        # Create batch handler with all dependencies
+        batch_handler = BatchHandler(
+            shared_datasets=self.shared_datasets,
+            shutdown_queue=self.shutdown_queue,
+            db_client=self.db_client,
+            batch_commit_size=self.config.batch_commit_size,
+        )
+
+        # Initialize client manager with batch handler
         self.client_manager = ClientManagerFactory.create(
             batch_size=self.config.batch_size,
-            batch_commit_size=self.config.batch_commit_size,
+            batch_handler=batch_handler,
             middleware=self.middleware,
-            db_client=self.db_client,
             channel=self.channel,
-            shutdown_queue=self.shutdown_queue,
-            shared_datasets=self.shared_datasets,
         )
 
         logger.info(f"Worker {self.worker_id} initialization complete")

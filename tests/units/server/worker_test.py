@@ -210,15 +210,17 @@ def test_initialize_success(
     mock_db_class.assert_called_once_with(mock_config.database_config)
 
     # Verify ClientManagerFactory.create was called with correct arguments
-    mock_factory.assert_called_once_with(
-        batch_size=mock_config.batch_size,
-        batch_commit_size=mock_config.batch_commit_size,
-        middleware=mock_middleware,
-        db_client=mock_db_client,
-        channel=mock_middleware.create_channel.return_value,
-        shutdown_queue=worker.shutdown_queue,
-        shared_datasets=mock_shared_datasets,
-    )
+    mock_factory.assert_called_once()
+    call_kwargs = mock_factory.call_args[1]
+
+    assert call_kwargs["batch_size"] == mock_config.batch_size
+    assert call_kwargs["middleware"] == mock_middleware
+    assert call_kwargs["channel"] == mock_middleware.create_channel.return_value
+
+    # Verify batch_handler was passed and is a BatchHandler instance
+    from src.server.batch_handler import BatchHandler
+
+    assert isinstance(call_kwargs["batch_handler"], BatchHandler)
 
     # Verify worker attributes are set
     assert worker.middleware == mock_middleware
