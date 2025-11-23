@@ -162,12 +162,12 @@ class Worker(multiprocessing.Process):
                 # Parse notification
                 notification_dict = json.loads(body)
 
-                # Quick validation using the model
                 try:
                     notification = ConnectNotification.from_dict(notification_dict)
                     if not notification.validate():
                         logger.error(
-                            f"Worker {self.worker_id}: Notification missing required fields, rejecting"
+                            f"Worker {self.worker_id}: Notification missing required fields."
+                            f"Received notification: {notification_dict}. Rejecting message."
                         )
                         self.middleware.nack_message(
                             channel=ch, delivery_tag=method.delivery_tag, requeue=False
@@ -188,7 +188,7 @@ class Worker(multiprocessing.Process):
                 )
 
                 # Handle the client request
-                # client_manager will use publish_with_transaction (ACK + Publish atomically)
+                # Finally publish_with_transaction (ACK + Publish atomically)
                 result = self.client_manager["handle_client"](
                     notification=notification,
                     delivery_tag=method.delivery_tag,
