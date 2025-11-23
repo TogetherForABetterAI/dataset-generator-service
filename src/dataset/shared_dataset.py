@@ -28,10 +28,12 @@ class SharedDatasets:
     """
 
     def __init__(self):
-        """Initialize empty container."""
-        self._data: Dict[str, np.ndarray] = {}
-        self._labels: Dict[str, np.ndarray] = {}
-        self._num_samples: Dict[str, int] = {}
+        """Initialize empty container with multiprocessing Manager for dict sharing."""
+        # Use Manager to share dicts across processes
+        manager = multiprocessing.Manager()
+        self._data = manager.dict()
+        self._labels = manager.dict()
+        self._num_samples = manager.dict()
 
     def add_dataset(self, name: str, loader_func) -> None:
         """
