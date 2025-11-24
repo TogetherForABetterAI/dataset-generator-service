@@ -21,13 +21,13 @@ class Batch(Base):
     batch_index = Column(Integer, primary_key=True, nullable=False)
     data_payload = Column(LargeBinary, nullable=False)
     labels = Column(JSON, nullable=False)
-    isEnqueued = Column(Boolean, nullable=False, default=False)
+    is_enqueued = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 
     # Indexes
     __table_args__ = (
         Index("idx_batches_session_id", "session_id"),
-        Index("idx_batches_isenqueued", "isEnqueued"),
+        Index("idx_batches_isenqueued", "is_enqueued"),
     )
 
     def __repr__(self):
