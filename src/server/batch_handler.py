@@ -63,7 +63,7 @@ class BatchHandler:
             data, labels = self.shared_datasets.get_dataset(model_type)
             total_samples = len(data)
         except ValueError as e:
-            logger.error(f"Failed to access dataset: {e}")
+            logger.error(f"Failed to get dataset: {e}")
             raise
 
         num_batches = (total_samples + batch_size - 1) // batch_size

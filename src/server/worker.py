@@ -97,7 +97,7 @@ class Worker(multiprocessing.Process):
 
     def run(self):
         """
-        Main worker loop (runs in the child process).
+        Main worker loop
 
         1. Setup signal handlers for SIGTERM/SIGINT
         2. Initialize connections and datasets
@@ -109,16 +109,13 @@ class Worker(multiprocessing.Process):
         signal.signal(signal.SIGINT, self._signal_handler)
 
         try:
-            # Setup worker
             self._initialize()
-
-            # Start consuming from RabbitMQ
             self._start_consuming()
-
         except KeyboardInterrupt:
             logger.info(f"Worker {self.worker_id} received KeyboardInterrupt")
         except Exception as e:
             logger.error(f"Worker {self.worker_id} fatal error: {e}", exc_info=True)
+            raise
         finally:
             self._cleanup()
 
@@ -140,7 +137,7 @@ class Worker(multiprocessing.Process):
             except Exception as e:
                 logger.warning(f"Worker {self.worker_id} error stopping consumer: {e}")
 
-        # Send cancellation signal to BatchHandler (if it's processing)
+        # Send cancellation signal to BatchHandler
         try:
             self.shutdown_queue.put(None, block=False)
         except:
@@ -161,21 +158,11 @@ class Worker(multiprocessing.Process):
             try:
                 # Parse notification
                 notification_dict = json.loads(body)
-
-                try:
-                    notification = ConnectNotification.from_dict(notification_dict)
-                    if not notification.validate():
-                        logger.error(
-                            f"Worker {self.worker_id}: Notification missing required fields."
-                            f"Received notification: {notification_dict}. Rejecting message."
-                        )
-                        self.middleware.nack_message(
-                            channel=ch, delivery_tag=method.delivery_tag, requeue=False
-                        )
-                        return
-                except Exception as e:
+                notification = ConnectNotification.from_dict(notification_dict)
+                if not notification.validate():
                     logger.error(
-                        f"Worker {self.worker_id}: Failed to parse notification: {e}, rejecting"
+                        f"Worker {self.worker_id}: Notification missing required fields."
+                        f"Received notification: {notification_dict}. Rejecting message."
                     )
                     self.middleware.nack_message(
                         channel=ch, delivery_tag=method.delivery_tag, requeue=False
