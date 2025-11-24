@@ -27,7 +27,7 @@ class Batch(Base):
     # Indexes
     __table_args__ = (
         Index("idx_batches_session_id", "session_id"),
-        Index("idx_batches_isenqueued", "is_enqueued"),
+        Index("idx_batches_is_enqueued", "is_enqueued"),
     )
 
     def __repr__(self):

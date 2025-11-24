@@ -45,7 +45,7 @@ class BatchRepository:
                         batch_index=batch_index,
                         data_payload=data_bytes,
                         labels=labels,
-                        isEnqueued=False,
+                        is_enqueued=False,
                     )
                     batch_objects.append(batch_obj)
 
