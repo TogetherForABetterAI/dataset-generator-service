@@ -15,11 +15,11 @@ class DatabaseConfig:
     """PostgreSQL connection configuration"""
 
     def __init__(self):
-        self.host: str = os.getenv("DB_HOST", "localhost")
-        self.port: int = int(os.getenv("DB_PORT", "5432"))
-        self.user: str = os.getenv("DB_USER", "postgres")
-        self.password: str = os.getenv("DB_PASSWORD", "postgres")
-        self.dbname: str = os.getenv("DB_NAME", "dataset_db")
+        self.host: str = os.getenv("POSTGRES_HOST", "localhost")
+        self.port: int = int(os.getenv("POSTGRES_PORT", "5432"))
+        self.user: str = os.getenv("POSTGRES_USER", "postgres")
+        self.password: str = os.getenv("POSTGRES_PASS", "postgres")
+        self.dbname: str = os.getenv("POSTGRES_NAME", "dataset_db")
 
     def get_connection_string(self) -> str:
         """Returns a connection string for psycopg2"""
@@ -65,7 +65,7 @@ class GlobalConfig:
             raise ValueError("RABBITMQ_MAX_RETRIES must be non-negative")
 
         if self.database_config.port < 1 or self.database_config.port > 65535:
-            raise ValueError("DB_PORT must be between 1 and 65535")
+            raise ValueError("POSTGRES_PORT must be between 1 and 65535")
 
         if self.middleware_config.port < 1 or self.middleware_config.port > 65535:
             raise ValueError("RABBITMQ_PORT must be between 1 and 65535")
