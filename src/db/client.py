@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from src.config.config import DatabaseConfig
-from src.schemas.batch import Base
+from src.models.batch import Base
 
 logger = logging.getLogger(__name__)
 

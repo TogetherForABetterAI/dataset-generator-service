@@ -3,7 +3,7 @@ import logging
 from typing import List, Tuple
 import numpy as np
 from src.db.client import DatabaseClient
-from src.schemas.batch import Batch
+from src.models.batch import Batch
 
 logger = logging.getLogger(__name__)
 
