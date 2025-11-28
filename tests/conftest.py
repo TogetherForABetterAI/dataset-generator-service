@@ -14,6 +14,20 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+@pytest.fixture(autouse=True)
+def reset_acdc_global():
+    """
+    Reset the global ACDC dataset cache before each test.
+    This ensures test isolation when testing load_acdc().
+    """
+    import src.dataset.acdc_loader as acdc_module
+
+    acdc_module._acdc_dataset = None
+    yield
+    # Reset after test as well
+    acdc_module._acdc_dataset = None
+
+
 @pytest.fixture
 def temp_acdc_dir():
     """
