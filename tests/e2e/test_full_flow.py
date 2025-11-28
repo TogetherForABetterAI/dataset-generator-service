@@ -23,7 +23,7 @@ def test_e2e_full_dataset_generation(rabbitmq_channel, db_session):
     6. Test consumes dispatcher message and verifies batch count in DB
     """
     session_id = str(uuid.uuid4())
-    client_id = "test-client-001"
+    user_id = "test-client-001"
     model_type = "mnist"
 
     print(f"\n[E2E] Starting test with session_id={session_id}")
@@ -33,7 +33,7 @@ def test_e2e_full_dataset_generation(rabbitmq_channel, db_session):
 
     publish_connect_message(
         rabbitmq_channel,
-        client_id=client_id,
+        user_id=user_id,
         session_id=session_id,
         model_type=model_type,
     )
@@ -49,15 +49,15 @@ def test_e2e_full_dataset_generation(rabbitmq_channel, db_session):
 
     print(f"[E2E] Received dispatcher message: {dispatcher_msg}")
 
-    assert "client_id" in dispatcher_msg, "Missing client_id in dispatcher message"
+    assert "user_id" in dispatcher_msg, "Missing user_id in dispatcher message"
     assert "session_id" in dispatcher_msg, "Missing session_id in dispatcher message"
     assert (
         "total_batches_generated" in dispatcher_msg
     ), "Missing total_batches_generated in dispatcher message"
 
     assert (
-        dispatcher_msg["client_id"] == client_id
-    ), f"client_id mismatch: expected {client_id}, got {dispatcher_msg['client_id']}"
+        dispatcher_msg["user_id"] == user_id
+    ), f"user_id mismatch: expected {user_id}, got {dispatcher_msg['user_id']}"
     assert (
         dispatcher_msg["session_id"] == session_id
     ), f"session_id mismatch: expected {session_id}, got {dispatcher_msg['session_id']}"

@@ -96,7 +96,7 @@ class ClientManagerFactory:
 
         # Create dispatcher notification
         notify = NotifyDispatcher(
-            client_id=notification.client_id,
+            user_id=notification.user_id,
             session_id=session_id,
             total_batches_generated=total_batches,
         )

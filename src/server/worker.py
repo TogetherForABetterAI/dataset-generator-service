@@ -171,7 +171,7 @@ class Worker(multiprocessing.Process):
 
                 logger.info(
                     f"Worker {self.worker_id} processing: "
-                    f"client_id={notification.client_id}, session_id={notification.session_id}"
+                    f"user_id={notification.user_id}, session_id={notification.session_id}"
                 )
 
                 # Handle the client request
@@ -183,7 +183,7 @@ class Worker(multiprocessing.Process):
 
                 logger.info(
                     f"Worker {self.worker_id} completed: "
-                    f"client_id={notification.client_id}, session_id={notification.session_id}, "
+                    f"user_id={notification.user_id}, session_id={notification.session_id}, "
                     f"batches_generated={result.get('batches_generated', 0)}"
                 )
 

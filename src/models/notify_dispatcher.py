@@ -12,12 +12,12 @@ class NotifyDispatcher:
     Notification message sent to the dispatcher after batch generation completes.
 
     Attributes:
-        client_id: ID of the client that requested the data
+        user_id: ID of the client that requested the data
         session_id: ID of the session/connection
         total_batches_generated: Total number of batches generated for this session
     """
 
-    client_id: str
+    user_id: str
     session_id: str
     total_batches_generated: int = 0
 
@@ -29,7 +29,7 @@ class NotifyDispatcher:
             Dictionary representation
         """
         return {
-            "client_id": self.client_id,
+            "user_id": self.user_id,
             "session_id": self.session_id,
             "total_batches_generated": self.total_batches_generated,
         }
@@ -40,13 +40,13 @@ class NotifyDispatcher:
         Create instance from dictionary.
 
         Args:
-            data: Dictionary with client_id, session_id, and total_batches_generated
+            data: Dictionary with user_id, session_id, and total_batches_generated
 
         Returns:
             NotifyDispatcher instance
         """
         return cls(
-            client_id=data.get("client_id", ""),
+            user_id=data.get("user_id", ""),
             session_id=data.get("session_id", ""),
             total_batches_generated=data.get("total_batches_generated", 0),
         )
@@ -58,4 +58,4 @@ class NotifyDispatcher:
         Returns:
             True if valid, False otherwise
         """
-        return bool(self.client_id) and bool(self.session_id)
+        return bool(self.user_id) and bool(self.session_id)

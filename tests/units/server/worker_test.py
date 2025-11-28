@@ -101,7 +101,7 @@ def mock_client_manager():
 def valid_notification_dict():
     """Create a valid notification dictionary"""
     return {
-        "client_id": "client-123",
+        "user_id": "client-123",
         "session_id": "session-456",
         "model_type": "ACDC",
         "inputs_format": "image",
@@ -283,7 +283,7 @@ def test_start_consuming_callback_success_path(
     """Test that the callback created by _start_consuming processes messages correctly"""
     # Mock ConnectNotification
     mock_notification = Mock()
-    mock_notification.client_id = "client-123"
+    mock_notification.user_id = "client-123"
     mock_notification.session_id = "session-456"
     mock_notification.validate.return_value = True
     mock_from_dict = Mock(return_value=mock_notification)
@@ -346,7 +346,7 @@ def test_start_consuming_callback_handles_exception(
     """Test that the callback handles exceptions from handle_client and NACKs message"""
     # Mock ConnectNotification
     mock_notification = Mock()
-    mock_notification.client_id = "client-123"
+    mock_notification.user_id = "client-123"
     mock_notification.session_id = "session-456"
     mock_notification.validate.return_value = True
     mock_from_dict = Mock(return_value=mock_notification)
@@ -780,7 +780,7 @@ def test_callback_integration(
     mock_factory = Mock(return_value=mock_client_manager)
     mock_queue_class = Mock(return_value=Mock())
     mock_notification = Mock()
-    mock_notification.client_id = "client-123"
+    mock_notification.user_id = "client-123"
     mock_notification.session_id = "session-456"
     mock_notification.validate.return_value = True
     mock_from_dict = Mock(return_value=mock_notification)

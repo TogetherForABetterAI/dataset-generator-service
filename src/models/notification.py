@@ -9,7 +9,7 @@ class ConnectNotification:
     This is the message structure received from RabbitMQ.
     """
 
-    client_id: str
+    user_id: str
     session_id: str
     inputs_format: Optional[str] = None
     outputs_format: Optional[str] = None
@@ -28,7 +28,7 @@ class ConnectNotification:
             ConnectNotification instance
         """
         return cls(
-            client_id=data.get("client_id"),
+            user_id=data.get("user_id"),
             session_id=data.get("session_id"),
             inputs_format=data.get("inputs_format"),
             outputs_format=data.get("outputs_format"),
@@ -43,7 +43,7 @@ class ConnectNotification:
             Dictionary representation
         """
         return {
-            "client_id": self.client_id,
+            "user_id": self.user_id,
             "session_id": self.session_id,
             "inputs_format": self.inputs_format,
             "outputs_format": self.outputs_format,
@@ -57,4 +57,4 @@ class ConnectNotification:
         Returns:
             True if valid, False otherwise
         """
-        return bool(self.client_id and self.session_id)
+        return bool(self.user_id and self.session_id)

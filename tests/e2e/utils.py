@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 def publish_connect_message(
     channel: pika.adapters.blocking_connection.BlockingChannel,
-    client_id: str,
+    user_id: str,
     session_id: str,
     model_type: str,
 ) -> None:
@@ -17,12 +17,12 @@ def publish_connect_message(
 
     Args:
         channel: RabbitMQ channel
-        client_id: Client identifier
+        user_id: Client identifier
         session_id: Session identifier
         model_type: Type of model (mnist, acdc)
     """
     message = {
-        "client_id": client_id,
+        "user_id": user_id,
         "session_id": session_id,
         "model_type": model_type,
     }
