@@ -1,0 +1,10 @@
+# Ignora carpetas y archivos grandes o temporales para Docker
+__pycache__/
+htmlcov/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+init.sql
