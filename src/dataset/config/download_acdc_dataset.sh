@@ -25,24 +25,31 @@ if ! command -v kaggle &> /dev/null; then
     exit 1
 fi
 
-# Check if kaggle.json exists in current directory
-if [ ! -f "kaggle.json" ]; then
-    echo -e "${RED}Error: kaggle.json not found in current directory!${NC}"
-    echo "Please download it from https://www.kaggle.com/me/account (API section)"
+
+
+# Get config directory
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KAGGLE_JSON_PATH="$CONFIG_DIR/kaggle.json"
+
+# Check if kaggle.json exists in src/dataset/config
+if [ ! -f "$KAGGLE_JSON_PATH" ]; then
+    echo -e "${RED}Error: kaggle.json not found in $CONFIG_DIR!${NC}"
+    echo "Please download it from https://www.kaggle.com/me/account (API section) and place it in src/dataset/config."
     exit 1
 fi
 
 # Set up Kaggle credentials
 echo -e "${YELLOW}Setting up Kaggle credentials...${NC}"
 mkdir -p ~/.kaggle
-cp kaggle.json ~/.kaggle/
+cp "$KAGGLE_JSON_PATH" ~/.kaggle/
 chmod 600 ~/.kaggle/kaggle.json
 echo -e "${GREEN}✓ Credentials configured${NC}"
 
 # Create data directory structure
 echo -e "${YELLOW}Creating data directories...${NC}"
-mkdir -p data/acdc_full
-cd data/acdc_full
+DATASET_DIR="$(cd "$CONFIG_DIR/.." && pwd)"
+mkdir -p "$DATASET_DIR/data/acdc_full"
+cd "$DATASET_DIR/data/acdc_full"
 
 # The ACDC dataset on Kaggle has different variations
 # Based on the notebook input page, the main datasets are:

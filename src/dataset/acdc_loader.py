@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
+import subprocess
 
 # Global lock to prevent concurrent access during initialization
 _acdc_lock = threading.Lock()
@@ -131,21 +131,30 @@ def load_acdc():
         if _acdc_dataset is not None:
             return _acdc_dataset
 
-        # Path to ACDC data relative to the service root
-        # Try full dataset first, fallback to sample dataset
-        acdc_data_path = "./data/acdc_full/ACDC_preprocessed/ACDC_training_slices"
+        # Path to ACDC data relative to src/dataset/
+        acdc_data_path = os.path.join(
+            os.path.dirname(__file__),
+            "data/acdc_full/ACDC_preprocessed/ACDC_training_slices",
+        )
 
+        # Si no existe el dataset, ejecuta el script de descarga
         if not os.path.exists(acdc_data_path):
-            print(
-                f"Full ACDC dataset not found at {acdc_data_path}, using sample dataset..."
-            )
-            acdc_data_path = "./data/acdc"
+            print(f"ACDC dataset not found at {acdc_data_path}. Descargando...")
+            import subprocess
 
-        # Check if data exists
+            script_path = os.path.join(
+                os.path.dirname(__file__), "config/download_acdc_dataset.sh"
+            )
+            try:
+                subprocess.run(["bash", script_path], check=True)
+            except Exception as e:
+                raise RuntimeError(f"Error al ejecutar el script de descarga: {e}")
+
+        # Verifica nuevamente si el dataset fue descargado
         if not os.path.exists(acdc_data_path):
             raise FileNotFoundError(
-                f"ACDC dataset not found at {acdc_data_path}. "
-                "Please ensure the H5 files are placed in the correct directory."
+                f"ACDC dataset no se pudo descargar en {acdc_data_path}. "
+                "Verifica el script de descarga."
             )
 
         # Optional: Define transforms for additional preprocessing
