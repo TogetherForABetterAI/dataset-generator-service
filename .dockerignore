@@ -7,4 +7,3 @@ htmlcov/
 *.db
 *.sqlite3
 *.log
-init.sql
