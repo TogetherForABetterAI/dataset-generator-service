@@ -18,7 +18,7 @@ class DatabaseConfig:
         self.host: str = os.getenv("POSTGRES_HOST", "localhost")
         self.port: int = int(os.getenv("POSTGRES_PORT", "5432"))
         self.user: str = os.getenv("POSTGRES_USER", "postgres")
-        self.password: str = os.getenv("POSTGRES_PASS", "postgres")
+        self.password: str = os.getenv("POSTGRES_PASSWORD", "postgres")
         self.dbname: str = os.getenv("POSTGRES_NAME", "dataset_db")
 
     def get_connection_string(self) -> str:
