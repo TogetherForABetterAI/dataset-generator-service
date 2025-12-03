@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from sqlalchemy import create_engine
+from sqlalchemy import QueuePool, create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from src.config.config import DatabaseConfig
@@ -24,7 +24,7 @@ class DatabaseClient:
     def connect(self):
         """Establish connection to PostgreSQL database and create session factory"""
         try:
-            connection_string = (
+            database_url = (
                 f"postgresql://{self.config.user}:{self.config.password}"
                 f"@{self.config.host}:{self.config.port}/{self.config.dbname}"
             )
@@ -33,11 +33,14 @@ class DatabaseClient:
                 f"Connecting to PostgreSQL at {self.config.host}:{self.config.port}/{self.config.dbname}"
             )
 
-            # Use NullPool for multiprocessing safety (no connection pooling)
             self.engine = create_engine(
-                connection_string,
-                poolclass=NullPool,
-                echo=False,  # Set to True for SQL query logging
+                database_url,
+                echo=False,
+                pool_size=1,  # Minimum 1 connection in the pool
+                max_overflow=0,  # No overflow connections
+                pool_timeout=30,  # Wait max 30 seconds for a connection
+                pool_recycle=1800,  # Recycle connections every 30 minutes
+                poolclass=QueuePool,  # Use QueuePool for connection pooling
             )
 
             # Create session factory
