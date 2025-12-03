@@ -73,7 +73,8 @@ class ClientManagerFactory:
         model_type = notification.model_type
 
         if not model_type:
-            raise ValueError("model_type is required in notification")
+            logger.error(f"model_type not defined {notification}")
+            raise ValueError("model_type must be defined in the notification")
 
         logger.info(
             f"ClientManager: Processing session_id={session_id}, "
@@ -89,10 +90,7 @@ class ClientManagerFactory:
         if total_batches is None:
             logger.warning(f"Batch generation cancelled for session {session_id}")
             # NACK message on cancellation (requeue for retry)
-            middleware.nack_message(
-                channel=channel, delivery_tag=delivery_tag, requeue=True
-            )
-            return {"status": "cancelled"}
+            raise
 
         # Create dispatcher notification
         notify = NotifyDispatcher(

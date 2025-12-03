@@ -187,19 +187,15 @@ class Worker(multiprocessing.Process):
                     f"batches_generated={result.get('batches_generated', 0)}"
                 )
 
-            except Exception as e:
+            except ValueError as ve:
                 logger.error(
-                    f"Worker {self.worker_id} error in callback: {e}", exc_info=True
+                    f"Worker {self.worker_id} value error in callback: {ve}", exc_info=True
                 )
-                # NACK the message on error (no requeue to avoid infinite loops)
-                try:
-                    self.middleware.nack_message(
-                        channel=ch, delivery_tag=method.delivery_tag, requeue=False
-                    )
-                except Exception as nack_error:
-                    logger.error(
-                        f"Worker {self.worker_id} failed to NACK message: {nack_error}"
-                    )
+                self._requeue_message(ch, method, False)
+            except Exception as e:
+                logger.info(
+                    f"Worker {self.worker_id} error processing message: {e}", exc_info=True)
+                self._requeue_message(ch, method, True)
 
         # Use worker_id as consumer_tag for identification
         consumer_tag = f"{self.config.pod_name}-worker-{self.worker_id}"
@@ -243,3 +239,18 @@ class Worker(multiprocessing.Process):
                 logger.warning(f"Worker {self.worker_id} error closing database: {e}")
 
         logger.info(f"Worker {self.worker_id} cleanup complete")
+
+    def _requeue_message(self, channel, method, requeue):
+        """
+        NACK the message to requeue it.
+
+        Args:
+            channel: RabbitMQ channel
+            method: Delivery method
+        """
+        try:
+            self.middleware.nack_message(
+                channel=channel, delivery_tag=method.delivery_tag, requeue=requeue
+            )
+        except Exception as e:
+            logger.error(f"Worker {self.worker_id} error NACKing message: {e}")
