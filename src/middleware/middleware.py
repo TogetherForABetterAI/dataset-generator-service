@@ -200,7 +200,6 @@ class Middleware:
         channel: pika.channel.Channel,
         queue: str,
         callback: Callable,
-        auto_ack: bool = False,
         consumer_tag: str = "",
     ) -> str:
         """
@@ -222,7 +221,7 @@ class Middleware:
         consumer_tag = channel.basic_consume(
             queue=queue,
             on_message_callback=callback,
-            auto_ack=auto_ack,
+            auto_ack=False,
             consumer_tag=consumer_tag,  # Pass custom tag or empty for auto-generation
         )
 

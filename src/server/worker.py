@@ -207,7 +207,6 @@ class Worker(multiprocessing.Process):
             channel=self.channel,
             queue=CONSUME_QUEUE,
             callback=callback,
-            auto_ack=False,
             consumer_tag=consumer_tag,
         )
 
