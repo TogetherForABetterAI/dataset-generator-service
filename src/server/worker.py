@@ -187,15 +187,13 @@ class Worker(multiprocessing.Process):
                     f"batches_generated={result.get('batches_generated', 0)}"
                 )
 
-            except ValueError as ve:
-                logger.error(
-                    f"Worker {self.worker_id} value error in callback: {ve}", exc_info=True
-                )
-                self._requeue_message(ch, method, False)
             except Exception as e:
                 logger.info(
-                    f"Worker {self.worker_id} error processing message: {e}", exc_info=True)
-                self._requeue_message(ch, method, True)
+                    f"Worker {self.worker_id} error processing message: {e}"
+                    f"Rejecting Message for user_id:{notification.user_id}",
+                    exc_info=True,
+                )
+                self._requeue_message(ch, method, False)
 
         # Use worker_id as consumer_tag for identification
         consumer_tag = f"{self.config.pod_name}-worker-{self.worker_id}"
